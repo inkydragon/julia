@@ -5,7 +5,7 @@ module Libc
 Interface to libc, the C standard library.
 """ Libc
 
-import Base: transcode
+import Base: transcode, windowserror
 import Core.Intrinsics: bitcast
 
 export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
@@ -54,7 +54,7 @@ if Sys.iswindows()
         status = ccall(:DuplicateHandle, stdcall, Int32,
             (Ptr{Cvoid}, WindowsRawSocket, Ptr{Cvoid}, Ptr{WindowsRawSocket}, UInt32, Int32, UInt32),
             my_process, src, my_process, new_handle, 0, false, DUPLICATE_SAME_ACCESS)
-        status == 0 && error("dup failed: $(FormatMessage())")
+        windowserror("dup failed", status == 0)
         return new_handle[]
     end
     function dup(src::WindowsRawSocket, target::RawFD)
@@ -122,6 +122,16 @@ elseif Sys.iswindows()
 else
     error("systemsleep undefined for this OS")
 end
+"""
+    systemsleep(s::Real)
+
+Suspends execution for `s` seconds.
+This function does not yield to Julia's scheduler and therefore blocks
+the Julia thread that it is running on for the duration of the sleep time.
+
+See also: [`sleep`](@ref)
+"""
+systemsleep
 
 struct TimeVal
    sec::Int64
@@ -327,8 +337,8 @@ end
 """
     free(addr::Ptr)
 
-Call `free` from the C standard library. Only use this on memory obtained from `malloc`, not
-on pointers retrieved from other C libraries. `Ptr` objects obtained from C libraries should
+Call `free` from the C standard library. Only use this on memory obtained from [`malloc`](@ref), not
+on pointers retrieved from other C libraries. [`Ptr`](@ref) objects obtained from C libraries should
 be freed by the free functions defined in that library, to avoid assertion failures if
 multiple `libc` libraries exist on the system.
 """
@@ -346,8 +356,8 @@ malloc(size::Integer) = ccall(:malloc, Ptr{Cvoid}, (Csize_t,), size)
 
 Call `realloc` from the C standard library.
 
-See warning in the documentation for `free` regarding only using this on memory originally
-obtained from `malloc`.
+See warning in the documentation for [`free`](@ref) regarding only using this on memory originally
+obtained from [`malloc`](@ref).
 """
 realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Cvoid}, (Ptr{Cvoid}, Csize_t), p, size)
 

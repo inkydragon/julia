@@ -74,7 +74,7 @@ function convert(::Type{RoundingMode}, r::MPFRRoundingMode)
     elseif r == MPFRRoundFromZero
         return RoundFromZero
     else
-        throw(ArgumentError("invalid MPFR rounding mode code: $c"))
+        throw(ArgumentError("invalid MPFR rounding mode code: $r"))
     end
 end
 
@@ -122,7 +122,7 @@ rounding_raw(::Type{BigFloat}) = ROUNDING_MODE[]
 setrounding_raw(::Type{BigFloat}, r::MPFRRoundingMode) = ROUNDING_MODE[]=r
 
 rounding(::Type{BigFloat}) = convert(RoundingMode, rounding_raw(BigFloat))
-setrounding(::Type{BigFloat},r::RoundingMode) = setrounding_raw(BigFloat, convert(MPFRRoundingMode, r))
+setrounding(::Type{BigFloat}, r::RoundingMode) = setrounding_raw(BigFloat, convert(MPFRRoundingMode, r))
 
 
 # overload the definition of unsafe_convert to ensure that `x.d` is assigned
@@ -151,6 +151,11 @@ global precision; `convert` will always return `x`.
 convenience since decimal literals are converted to `Float64` when parsed, so
 `BigFloat(2.1)` may not yield what you expect.
 
+!!! compat "Julia 1.1"
+    `precision` as a keyword argument requires at least Julia 1.1.
+    In Julia 1.0 `precision` is the second positional argument (`BigFloat(x, precision)`).
+
+# Examples
 ```jldoctest
 julia> BigFloat(2.1) # 2.1 here is a Float64
 2.100000000000000088817841970012523233890533447265625
@@ -186,6 +191,11 @@ function BigFloat(x::BigFloat, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::I
     end
 end
 
+function _duplicate(x::BigFloat)
+    z = BigFloat(;precision=precision(x))
+    ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, Int32), z, x, 0)
+    return z
+end
 
 # convert to BigFloat
 for (fJ, fC) in ((:si,:Clong), (:ui,:Culong))
@@ -224,8 +234,13 @@ BigFloat(x::Union{UInt8,UInt16,UInt32}, r::MPFRRoundingMode=ROUNDING_MODE[]; pre
 BigFloat(x::Union{Float16,Float32}, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
     BigFloat(Float64(x), r; precision=precision)
 
-BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[]) =
-    BigFloat(numerator(x), r; precision=precision) / BigFloat(denominator(x), r ;precision=precision)
+function BigFloat(x::Rational, r::MPFRRoundingMode=ROUNDING_MODE[]; precision::Integer=DEFAULT_PRECISION[])
+    setprecision(BigFloat, precision) do
+        setrounding_raw(BigFloat, r) do
+            BigFloat(numerator(x)) / BigFloat(denominator(x))
+        end
+    end
+end
 
 function tryparse(::Type{BigFloat}, s::AbstractString; base::Integer=0, precision::Integer=DEFAULT_PRECISION[], rounding::MPFRRoundingMode=ROUNDING_MODE[])
     !isempty(s) && isspace(s[end]) && return tryparse(BigFloat, rstrip(s), base = base)
@@ -321,7 +336,7 @@ function BigInt(x::BigFloat)
 end
 
 function (::Type{T})(x::BigFloat) where T<:Integer
-    isinteger(x) || throw(InexactError(Symbol(string(T)), T, x))
+    isinteger(x) || throw(InexactError(nameof(T), T, x))
     trunc(T,x)
 end
 
@@ -344,6 +359,8 @@ promote_rule(::Type{BigInt}, ::Type{<:AbstractFloat}) = BigFloat
 promote_rule(::Type{BigFloat}, ::Type{<:AbstractFloat}) = BigFloat
 
 big(::Type{<:AbstractFloat}) = BigFloat
+
+big(x::AbstractFloat) = convert(BigFloat, x)
 
 function (::Type{Rational{BigInt}})(x::AbstractFloat)
     isnan(x) && return zero(BigInt) // zero(BigInt)
@@ -799,6 +816,12 @@ precision(::Type{BigFloat}) = Int(DEFAULT_PRECISION[]) # precision of the type B
     setprecision([T=BigFloat,] precision::Int)
 
 Set the precision (in bits) to be used for `T` arithmetic.
+
+!!! warning
+
+    This function is not thread-safe. It will affect code running on all threads, but
+    its behavior is undefined if called concurrently with computations that use the
+    setting.
 """
 function setprecision(::Type{BigFloat}, precision::Integer)
     if precision < 2
@@ -877,21 +900,24 @@ isone(x::BigFloat) = x == Clong(1)
 @eval typemax(::Type{BigFloat}) = $(BigFloat(Inf))
 @eval typemin(::Type{BigFloat}) = $(BigFloat(-Inf))
 
-function nextfloat(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode),
-          z, x, ROUNDING_MODE[])
-    ccall((:mpfr_nextabove, :libmpfr), Int32, (Ref{BigFloat},), z) != 0
-    return z
+function nextfloat!(x::BigFloat, n::Integer=1)
+    signbit(n) && return prevfloat!(x, abs(n))
+    for i = 1:n
+        ccall((:mpfr_nextabove, :libmpfr), Int32, (Ref{BigFloat},), x)
+    end
+    return x
 end
 
-function prevfloat(x::BigFloat)
-    z = BigFloat()
-    ccall((:mpfr_set, :libmpfr), Int32, (Ref{BigFloat}, Ref{BigFloat}, MPFRRoundingMode),
-          z, x, ROUNDING_MODE[])
-    ccall((:mpfr_nextbelow, :libmpfr), Int32, (Ref{BigFloat},), z) != 0
-    return z
+function prevfloat!(x::BigFloat, n::Integer=1)
+    signbit(n) && return nextfloat!(x, abs(n))
+    for i = 1:n
+        ccall((:mpfr_nextbelow, :libmpfr), Int32, (Ref{BigFloat},), x)
+    end
+    return x
 end
+
+nextfloat(x::BigFloat, n::Integer=1) = n == 0 ? x : nextfloat!(_duplicate(x), n)
+prevfloat(x::BigFloat, n::Integer=1) = n == 0 ? x : prevfloat!(_duplicate(x), n)
 
 eps(::Type{BigFloat}) = nextfloat(BigFloat(1)) - BigFloat(1)
 
@@ -910,6 +936,9 @@ It is logically equivalent to:
     setprecision(BigFloat, old)
 
 Often used as `setprecision(T, precision) do ... end`
+
+Note: `nextfloat()`, `prevfloat()` do not use the precision mentioned by
+`setprecision`
 """
 function setprecision(f::Function, ::Type{T}, prec::Integer) where T
     old_prec = precision(T)
@@ -956,8 +985,20 @@ function _prettify_bigfloat(s::String)::String
     if endswith(mantissa, '.')
         mantissa = string(mantissa, '0')
     end
-    if exponent == "+00"
-        mantissa
+    expo = parse(Int, exponent)
+    if -5 < expo < 6
+        expo == 0 && return mantissa
+        int, frac = split(mantissa, '.')
+        if expo > 0
+            expo < length(frac) ?
+                string(int, frac[1:expo], '.', frac[expo+1:end]) :
+                string(int, frac, '0'^(expo-length(frac)), '.', '0')
+        else
+            neg = startswith(int, '-')
+            neg == true && (int = lstrip(int, '-'))
+            @assert length(int) == 1
+            string(neg ? '-' : "", '0', '.', '0'^(-expo-1), int, frac)
+        end
     else
         string(mantissa, 'e', exponent)
     end
@@ -990,8 +1031,9 @@ get_emin() = ccall((:mpfr_get_emin, :libmpfr), Clong, ())
 get_emin_min() = ccall((:mpfr_get_emin_min, :libmpfr), Clong, ())
 get_emin_max() = ccall((:mpfr_get_emin_max, :libmpfr), Clong, ())
 
-set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Cvoid, (Clong,), x)
-set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Cvoid, (Clong,), x)
+check_exponent_err(ret) = ret == 0 || throw(ArgumentError("Invalid MPFR exponent range"))
+set_emax!(x) = check_exponent_err(ccall((:mpfr_set_emax, :libmpfr), Cint, (Clong,), x))
+set_emin!(x) = check_exponent_err(ccall((:mpfr_set_emin, :libmpfr), Cint, (Clong,), x))
 
 function Base.deepcopy_internal(x::BigFloat, stackdict::IdDict)
     haskey(stackdict, x) && return stackdict[x]
