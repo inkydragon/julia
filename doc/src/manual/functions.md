@@ -538,7 +538,7 @@ julia> map(((x,y),) -> x + y, [(1,2), (3,4)])
  7
 ```
 
-## Varargs Functions
+## [Varargs Functions](@id man-func-varargs)
 
 It is often convenient to be able to write functions taking an arbitrary number of arguments.
 Such functions are traditionally known as "varargs" functions, which is short for "variable number

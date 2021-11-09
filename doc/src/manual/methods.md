@@ -783,8 +783,8 @@ matmul(a, b) = matmul(promote(a, b)...)
 ## Parametrically-constrained Varargs methods
 
 Function parameters can also be used to constrain the number of arguments that may be supplied
-to a "varargs" function ([Varargs Functions](@ref)).  The notation `Vararg{T,N}` is used to indicate
-such a constraint.  For example:
+to a "varargs" function ([Varargs Functions](@ref man-func-varargs)).
+The notation `Vararg{T,N}` is used to indicate such a constraint.  For example:
 
 ```jldoctest
 julia> bar(a,b,x::Vararg{Any,2}) = (a,b,x)
