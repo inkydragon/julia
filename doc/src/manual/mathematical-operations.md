@@ -375,7 +375,7 @@ comparison is undefined. It is strongly recommended not to use expressions with 
 as printing) in chained comparisons. If side effects are required, the short-circuit `&&` operator
 should be used explicitly (see [Short-Circuit Evaluation](@ref man-control-flow-short-circuit)).
 
-### Elementary Functions
+### [Elementary Functions](@id man-math-ops-elementary)
 
 Julia provides a comprehensive collection of mathematical functions and operators. These mathematical
 operations are defined over as broad a class of numerical values as permit sensible definitions,

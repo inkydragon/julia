@@ -113,7 +113,7 @@ julia> angle(1 + 2im) # phase angle in radians
 As usual, the absolute value ([`abs`](@code-self-ref)) of a complex number is its distance from zero.
 [`abs2`](@code-self-ref) gives the square of the absolute value, and is of particular use for complex
 numbers since it avoids taking a square root. [`angle`](@code-self-ref) returns the phase angle in radians
-(also known as the *argument* or *arg* function). The full gamut of other [Elementary Functions](@ref)
+(also known as the *argument* or *arg* function). The full gamut of other [Elementary Functions](@ref man-math-ops-elementary)
 is also defined for complex numbers:
 
 ```jldoctest
