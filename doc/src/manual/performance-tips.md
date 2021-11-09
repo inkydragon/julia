@@ -7,7 +7,7 @@ code run as fast as possible.
 
 Any code that is performance critical should be inside a function. Code inside functions tends to run much faster than top level code, due to how Julia's compiler works.
 
-The use of functions is not only important for performance: functions are more reusable and testable, and clarify what steps are being done and what their inputs and outputs are, [Write functions, not just scripts](@ref) is also a recommendation of Julia's Styleguide.
+The use of functions is not only important for performance: functions are more reusable and testable, and clarify what steps are being done and what their inputs and outputs are, [Write functions, not just scripts](@ref man-style-write-func) is also a recommendation of Julia's Styleguide.
 
 The functions should take arguments, instead of operating directly on global variables, see the next point.
 

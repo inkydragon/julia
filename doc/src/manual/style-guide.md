@@ -8,7 +8,7 @@ you choose among alternative designs.
 
 Use 4 spaces per indentation level.
 
-## Write functions, not just scripts
+## [Write functions, not just scripts](@id man-style-write-func)
 
 Writing code as a series of steps at the top level is a quick way to get started solving a problem,
 but you should try to divide a program into functions as soon as possible. Functions are more
