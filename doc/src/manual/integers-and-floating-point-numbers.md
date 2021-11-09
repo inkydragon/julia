@@ -226,7 +226,7 @@ type. (The above expression uses several features that have yet to be introduced
 [Strings](@ref man-strings), and [Interpolation](@ref string-interpolation), but should be easy enough to understand for users
 with some existing programming experience.)
 
-### Overflow behavior
+### [Overflow behavior](@id man-int-float-overflow)
 
 In Julia, exceeding the maximum representable value of a given type results in a wraparound behavior:
 
