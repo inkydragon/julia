@@ -297,7 +297,7 @@ arguments. This is why a nominative type system is necessary: if structure deter
 which in turn dictates behavior, then it would be impossible to make [`Bool`](@code-self-ref) behave
 any differently than [`Int8`](@code-self-ref) or [`UInt8`](@code-self-ref).
 
-## Composite Types
+## [Composite Types](@id man-types-decl-composite)
 
 [Composite types](https://en.wikipedia.org/wiki/Composite_data_type) are called records, structs,
 or objects in various languages. A composite type is a collection of named fields,

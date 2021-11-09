@@ -56,7 +56,7 @@ have many methods defining their behavior over various possible combinations of 
 and count.
 
 When defining a function, one can optionally constrain the types of parameters it is applicable
-to, using the `::` type-assertion operator, introduced in the section on [Composite Types](@ref):
+to, using the `::` type-assertion operator, introduced in the section on [Composite Types](@ref man-types-decl-composite):
 
 ```jldoctest fofxy
 julia> f(x::Float64, y::Float64) = 2x + y

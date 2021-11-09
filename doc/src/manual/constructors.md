@@ -1,6 +1,6 @@
 # [Constructors](@id man-constructors)
 
-Constructors [^1] are functions that create new objects -- specifically, instances of [Composite Types](@ref).
+Constructors [^1] are functions that create new objects -- specifically, instances of [Composite Types](@ref man-types-decl-composite).
 In Julia, type objects also serve as constructor functions: they create new instances of themselves
 when applied to an argument tuple as a function. This much was already mentioned briefly when
 composite types were introduced. For example:
