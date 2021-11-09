@@ -99,7 +99,7 @@ As in the example above, we recommend following some simple conventions when wri
 6. Include any code examples in an `# Examples` section.
 
    Examples should, whenever possible, be written as *doctests*. A *doctest* is a fenced code block
-   (see [Code blocks](@ref)) starting with ````` ```jldoctest````` and contains any number of `julia>`
+   (see [Code blocks](@ref-std)) starting with ````` ```jldoctest````` and contains any number of `julia>`
    prompts together with inputs and expected outputs that mimic the Julia REPL.
 
    !!! note
