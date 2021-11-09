@@ -756,7 +756,7 @@ slow.
 Now, one very good way to solve such problems is by using the [function-barrier technique](@ref kernel-functions).
 However, in some cases you might want to eliminate the type-instability altogether. In such cases,
 one approach is to pass the dimensionality as a parameter, for example through `Val{T}()` (see
-["Value types"](@ref)):
+[Value types](@ref man-types-val)):
 
 ```jldoctest
 julia> function array3(fillval, ::Val{N}) where N

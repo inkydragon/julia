@@ -1514,7 +1514,7 @@ julia> [Polar(3, 4.0) Polar(4.0,5.3)]
 See the [`IOContext`](@code-self-ref) documentation for a list of common properties which can be used
 to adjust printing.
 
-## "Value types"
+## [Value types](@id man-types-val)
 
 In Julia, you can't dispatch on a *value* such as `true` or `false`. However, you can dispatch
 on parametric types, and Julia allows you to include "plain bits" values (Types, Symbols, Integers,
