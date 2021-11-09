@@ -36,8 +36,8 @@ The 10,000 foot view of the whole process is as follows:
 5. If the block of code to run is in a file, [`jl_load(char *filename)`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c)
    gets invoked to load the file and [parse](@ref dev-parsing) it. Each fragment of code is then passed to `eval`
    to execute.
-6. Each fragment of code (or AST), is handed off to [`eval()`](@ref) to turn into results.
-7. [`eval()`](@ref) takes each code fragment and tries to run it in [`jl_toplevel_eval_flex()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c).
+6. Each fragment of code (or AST), is handed off to [`eval()`](@code-self-ref) to turn into results.
+7. [`eval()`](@code-self-ref) takes each code fragment and tries to run it in [`jl_toplevel_eval_flex()`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c).
 8. `jl_toplevel_eval_flex()` decides whether the code is a "toplevel" action (such as `using` or
    `module`), which would be invalid inside a function. If so, it passes off the code to the toplevel
    interpreter.
@@ -53,7 +53,7 @@ The 10,000 foot view of the whole process is as follows:
 13. Eventually, the user quits the REPL, or the end of the program is reached, and the `_start()`
     method returns.
 14. Just before exiting, `main()` calls [`jl_atexit_hook(exit_code)`](https://github.com/JuliaLang/julia/blob/master/src/init.c).
-    This calls `Base._atexit()` (which calls any functions registered to [`atexit()`](@ref) inside
+    This calls `Base._atexit()` (which calls any functions registered to [`atexit()`](@code-self-ref) inside
     Julia). Then it calls [`jl_gc_run_all_finalizers()`](https://github.com/JuliaLang/julia/blob/master/src/gc.c).
     Finally, it gracefully cleans up all `libuv` handles and waits for them to flush and close.
 
@@ -81,13 +81,13 @@ on its own as follows:
 
 ## [Macro Expansion](@id dev-macro-expansion)
 
-When [`eval()`](@ref) encounters a macro, it expands that AST node before attempting to evaluate
-the expression. Macro expansion involves a handoff from [`eval()`](@ref) (in Julia), to the parser
+When [`eval()`](@code-self-ref) encounters a macro, it expands that AST node before attempting to evaluate
+the expression. Macro expansion involves a handoff from [`eval()`](@code-self-ref) (in Julia), to the parser
 function `jl_macroexpand()` (written in `flisp`) to the Julia macro itself (written in - what
 else - Julia) via `fl_invoke_julia_macro()`, and back.
 
-Typically, macro expansion is invoked as a first step during a call to [`Meta.lower()`](@ref)/`jl_expand()`,
-although it can also be invoked directly by a call to [`macroexpand()`](@ref)/`jl_macroexpand()`.
+Typically, macro expansion is invoked as a first step during a call to [`Meta.lower()`](@code-self-ref)/`jl_expand()`,
+although it can also be invoked directly by a call to [`macroexpand()`](@code-self-ref)/`jl_macroexpand()`.
 
 ## [Type Inference](@id dev-type-inference)
 

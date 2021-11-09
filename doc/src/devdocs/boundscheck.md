@@ -75,7 +75,7 @@ methods have the chain `getindex(A::AbstractArray, i::Real)` calls `getindex(Ind
 calls `_getindex(::IndexLinear, A, i)`.
 
 To override the "one layer of inlining" rule, a function may be marked with
-[`Base.@propagate_inbounds`](@ref) to propagate an inbounds context (or out of bounds
+[`Base.@propagate_inbounds`](@code-self-ref) to propagate an inbounds context (or out of bounds
 context) through one additional layer of inlining.
 
 ## The bounds checking call hierarchy

@@ -184,7 +184,7 @@ At this point, the project should build and run.
 
 Real applications will not just need to execute expressions, but also return their values to the
 host program. `jl_eval_string` returns a `jl_value_t*`, which is a pointer to a heap-allocated
-Julia object. Storing simple data types like [`Float64`](@ref) in this way is called `boxing`,
+Julia object. Storing simple data types like [`Float64`](@code-self-ref) in this way is called `boxing`,
 and extracting the stored primitive data is called `unboxing`. Our improved sample program that
 calculates the square root of 2 in Julia and reads back the result in C looks as follows:
 
@@ -203,7 +203,7 @@ else {
 In order to check whether `ret` is of a specific Julia type, we can use the
 `jl_isa`, `jl_typeis`, or `jl_is_...` functions.
 By typing `typeof(sqrt(2.0))` into the Julia shell we can see that the return type is
-[`Float64`](@ref) (`double` in C). To convert the boxed Julia value into a C double the
+[`Float64`](@code-self-ref) (`double` in C). To convert the boxed Julia value into a C double the
 `jl_unbox_float64` function is used in the above code snippet.
 
 Corresponding `jl_box_...` functions are used to convert the other way:

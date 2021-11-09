@@ -7,21 +7,21 @@ try to get under the hood, focusing particularly on [Parametric Types](@ref).
 
 It's perhaps easiest to conceive of Julia's type system in terms of sets. While programs manipulate
 individual values, a type refers to a set of values. This is not the same thing as a collection;
-for example a [`Set`](@ref) of values is itself a single `Set` value.
+for example a [`Set`](@code-self-ref) of values is itself a single `Set` value.
 Rather, a type describes a set of *possible* values, expressing uncertainty about which value we
 have.
 
-A *concrete* type `T` describes the set of values whose direct tag, as returned by the [`typeof`](@ref)
+A *concrete* type `T` describes the set of values whose direct tag, as returned by the [`typeof`](@code-self-ref)
 function, is `T`. An *abstract* type describes some possibly-larger set of values.
 
-[`Any`](@ref) describes the entire universe of possible values. [`Integer`](@ref) is a subset of
-`Any` that includes `Int`, [`Int8`](@ref), and other concrete types.
+[`Any`](@code-self-ref) describes the entire universe of possible values. [`Integer`](@code-self-ref) is a subset of
+`Any` that includes `Int`, [`Int8`](@code-self-ref), and other concrete types.
 Internally, Julia also makes heavy use of another type known as `Bottom`, which can also be written
 as `Union{}`. This corresponds to the empty set.
 
 Julia's types support the standard operations of set theory: you can ask whether `T1` is a "subset"
-(subtype) of `T2` with `T1 <: T2`. Likewise, you intersect two types using [`typeintersect`](@ref), take
-their union with [`Union`](@ref), and compute a type that contains their union with [`typejoin`](@ref):
+(subtype) of `T2` with `T1 <: T2`. Likewise, you intersect two types using [`typeintersect`](@code-self-ref), take
+their union with [`Union`](@code-self-ref), and compute a type that contains their union with [`typejoin`](@code-self-ref):
 
 ```jldoctest
 julia> typeintersect(Int, Float64)
@@ -66,7 +66,7 @@ Julia's type system can also express an *iterated union* of types: a union of ty
 of some variable. This is needed to describe parametric types where the values of some parameters
 are not known.
 
-For example, [`Array`](@ref) has two parameters as in `Array{Int,2}`. If we did not know the element
+For example, [`Array`](@code-self-ref) has two parameters as in `Array{Int,2}`. If we did not know the element
 type, we could write `Array{T,2} where T`, which is the union of `Array{T,2}` for all values of
 `T`: `Union{Array{Int8,2}, Array{Int16,2}, ...}`.
 
@@ -153,7 +153,7 @@ which it returns true will not give meaningful answers in subtyping and other ty
 
 ## TypeNames
 
-The following two [`Array`](@ref) types are functionally equivalent, yet print differently:
+The following two [`Array`](@code-self-ref) types are functionally equivalent, yet print differently:
 
 ```jldoctest
 julia> TV, NV = TypeVar(:T), TypeVar(:N)
@@ -221,7 +221,7 @@ julia> pointer_from_objref(Array{TV,NV}.name.wrapper)
 Ptr{Cvoid} @0x00007fcc7de64850
 ```
 
-The `wrapper` field of [`Array`](@ref) points to itself, but for `Array{TV,NV}` it points back
+The `wrapper` field of [`Array`](@code-self-ref) points to itself, but for `Array{TV,NV}` it points back
 to the original definition of the type.
 
 What about the other fields? `hash` assigns an integer to each type.  To examine the `cache`
@@ -327,7 +327,7 @@ However, this interpretation causes some practical problems.
 
 First, a value of `T` needs to be available inside the method definition.
 For a call like `f(1, 1.0)`, it's not clear what `T` should be.
-It could be `Union{Int,Float64}`, or perhaps [`Real`](@ref).
+It could be `Union{Int,Float64}`, or perhaps [`Real`](@code-self-ref).
 Intuitively, we expect the declaration `x::T` to mean `T === typeof(x)`.
 To make sure that invariant holds, we need `typeof(x) === typeof(y) === T` in this method.
 That implies the method should only be called for arguments of the exact same type.
@@ -385,7 +385,7 @@ f(x::Union{Nothing,T}, y::T) where {T} = ...
 ```
 
 Consider what this declaration means.
-`y` has type `T`. `x` then can have either the same type `T`, or else be of type [`Nothing`](@ref).
+`y` has type `T`. `x` then can have either the same type `T`, or else be of type [`Nothing`](@code-self-ref).
 So all of the following calls should match:
 
 ```julia
@@ -455,7 +455,7 @@ When we are done evaluating the body of a `UnionAll` type whose variable is diag
 we look at the final values of the bounds.
 Since the variable must be concrete, a contradiction occurs if its lower bound
 could not be a subtype of a concrete type.
-For example, an abstract type like [`AbstractArray`](@ref) cannot be a subtype of a concrete
+For example, an abstract type like [`AbstractArray`](@code-self-ref) cannot be a subtype of a concrete
 type, but a concrete type like `Int` can be, and the empty type `Bottom` can be as well.
 If a lower bound fails this test the algorithm stops with the answer `false`.
 

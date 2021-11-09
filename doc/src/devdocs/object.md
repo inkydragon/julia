@@ -103,7 +103,7 @@ jl_value_t *jl_new_struct(jl_datatype_t *type, ...);
 jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uint32_t na);
 ```
 
-Although, [`isbits`](@ref) objects can be also constructed directly from memory:
+Although, [`isbits`](@code-self-ref) objects can be also constructed directly from memory:
 
 ```c
 jl_value_t *jl_new_bits(jl_value_t *bt, void *data)
@@ -132,7 +132,7 @@ jl_tuple_t *jl_alloc_tuple(size_t n);
 ```
 
 The representation of tuples is highly unique in the Julia object representation ecosystem. In
-some cases, a [`Base.tuple()`](@ref) object may be an array of pointers to the objects contained
+some cases, a [`Base.tuple()`](@code-self-ref) object may be an array of pointers to the objects contained
 by the tuple equivalent to:
 
 ```c
@@ -142,7 +142,7 @@ typedef struct {
 } jl_tuple_t;
 ```
 
-However, in other cases, the tuple may be converted to an anonymous [`isbits`](@ref) type and
+However, in other cases, the tuple may be converted to an anonymous [`isbits`](@code-self-ref) type and
 stored unboxed, or it may not stored at all (if it is not being used in a generic context as a
 `jl_value_t*`).
 

@@ -25,21 +25,21 @@ A remote reference is an object that can be used from any process to refer to an
 on a particular process. A remote call is a request by one process to call a certain function
 on certain arguments on another (possibly the same) process.
 
-Remote references come in two flavors: [`Future`](@ref Distributed.Future) and [`RemoteChannel`](@ref).
+Remote references come in two flavors: [`Future`](@ref Distributed.Future) and [`RemoteChannel`](@code-self-ref).
 
 A remote call returns a [`Future`](@ref Distributed.Future) to its result. Remote calls return immediately; the process
 that made the call proceeds to its next operation while the remote call happens somewhere else.
-You can wait for a remote call to finish by calling [`wait`](@ref) on the returned [`Future`](@ref Distributed.Future),
-and you can obtain the full value of the result using [`fetch`](@ref).
+You can wait for a remote call to finish by calling [`wait`](@code-self-ref) on the returned [`Future`](@ref Distributed.Future),
+and you can obtain the full value of the result using [`fetch`](@code-self-ref).
 
-On the other hand, [`RemoteChannel`](@ref) s are rewritable. For example, multiple processes can
+On the other hand, [`RemoteChannel`](@code-self-ref) s are rewritable. For example, multiple processes can
 co-ordinate their processing by referencing the same remote `Channel`.
 
 Each process has an associated identifier. The process providing the interactive Julia prompt
 always has an `id` equal to 1. The processes used by default for parallel operations are referred
 to as "workers". When there is only one process, process 1 is considered a worker. Otherwise,
 workers are considered to be all processes other than process 1. As a result, adding 2 or more
-processes is required to gain benefits from parallel processing methods like [`pmap`](@ref). Adding
+processes is required to gain benefits from parallel processing methods like [`pmap`](@code-self-ref). Adding
 a single process is beneficial if you just wish to do other things in the main process while a long
 computation is running on the worker.
 
@@ -63,20 +63,20 @@ julia> fetch(s)
  1.16296  1.60607
 ```
 
-The first argument to [`remotecall`](@ref) is the function to call. Most parallel programming
-in Julia does not reference specific processes or the number of processes available, but [`remotecall`](@ref)
-is considered a low-level interface providing finer control. The second argument to [`remotecall`](@ref)
+The first argument to [`remotecall`](@code-self-ref) is the function to call. Most parallel programming
+in Julia does not reference specific processes or the number of processes available, but [`remotecall`](@code-self-ref)
+is considered a low-level interface providing finer control. The second argument to [`remotecall`](@code-self-ref)
 is the `id` of the process that will do the work, and the remaining arguments will be passed to
 the function being called.
 
 As you can see, in the first line we asked process 2 to construct a 2-by-2 random matrix, and
 in the second line we asked it to add 1 to it. The result of both calculations is available in
-the two futures, `r` and `s`. The [`@spawnat`](@ref) macro evaluates the expression in the second
+the two futures, `r` and `s`. The [`@spawnat`](@code-self-ref) macro evaluates the expression in the second
 argument on the process specified by the first argument.
 
 Occasionally you might want a remotely-computed value immediately. This typically happens when
 you read from a remote object to obtain data needed by the next local operation. The function
-[`remotecall_fetch`](@ref) exists for this purpose. It is equivalent to `fetch(remotecall(...))`
+[`remotecall_fetch`](@code-self-ref) exists for this purpose. It is equivalent to `fetch(remotecall(...))`
 but is more efficient.
 
 ```julia-repl
@@ -92,10 +92,10 @@ julia> remotecall_fetch(getindex, 2, r, 1, 1)
 0.10824216411304866
 ```
 
-Remember that [`getindex(r,1,1)`](@ref) is [equivalent](@ref man-array-indexing) to `r[1,1]`, so this call fetches
+Remember that [`getindex(r,1,1)`](@code-self-ref) is [equivalent](@ref man-array-indexing) to `r[1,1]`, so this call fetches
 the first element of the future `r`.
 
-To make things easier, the symbol `:any` can be passed to [`@spawnat`](@ref), which picks where to do
+To make things easier, the symbol `:any` can be passed to [`@spawnat`](@code-self-ref), which picks where to do
 the operation for you:
 
 ```julia-repl
@@ -112,21 +112,21 @@ julia> fetch(s)
 ```
 
 Note that we used `1 .+ fetch(r)` instead of `1 .+ r`. This is because we do not know where the
-code will run, so in general a [`fetch`](@ref) might be required to move `r` to the process
-doing the addition. In this case, [`@spawnat`](@ref) is smart enough to perform the computation
-on the process that owns `r`, so the [`fetch`](@ref) will be a no-op (no work is done).
+code will run, so in general a [`fetch`](@code-self-ref) might be required to move `r` to the process
+doing the addition. In this case, [`@spawnat`](@code-self-ref) is smart enough to perform the computation
+on the process that owns `r`, so the [`fetch`](@code-self-ref) will be a no-op (no work is done).
 
-(It is worth noting that [`@spawnat`](@ref) is not built-in but defined in Julia as a [macro](@ref man-macros).
+(It is worth noting that [`@spawnat`](@code-self-ref) is not built-in but defined in Julia as a [macro](@ref man-macros).
 It is possible to define your own such constructs.)
 
 An important thing to remember is that, once fetched, a [`Future`](@ref Distributed.Future) will cache its value
-locally. Further [`fetch`](@ref) calls do not entail a network hop. Once all referencing [`Future`](@ref Distributed.Future)s
+locally. Further [`fetch`](@code-self-ref) calls do not entail a network hop. Once all referencing [`Future`](@ref Distributed.Future)s
 have fetched, the remote stored value is deleted.
 
-[`@async`](@ref) is similar to [`@spawnat`](@ref), but only runs tasks on the local process. We
+[`@async`](@code-self-ref) is similar to [`@spawnat`](@code-self-ref), but only runs tasks on the local process. We
 use it to create a "feeder" task for each process. Each task picks the next index that needs to
 be computed, then waits for its process to finish, then repeats until we run out of indices. Note
-that the feeder tasks do not begin to execute until the main task reaches the end of the [`@sync`](@ref)
+that the feeder tasks do not begin to execute until the main task reaches the end of the [`@sync`](@code-self-ref)
 block, at which point it surrenders control and waits for all the local tasks to complete before
 returning from the function.
 As for v0.7 and beyond, the feeder tasks are able to share state via `nextidx` because
@@ -134,7 +134,7 @@ they all run on the same process.
 Even if `Tasks` are scheduled cooperatively, locking may still be required in some contexts, as in
 [asynchronous I/O](@ref faq-async-io).
 This means context switches only occur at well-defined points: in this case,
-when [`remotecall_fetch`](@ref) is called. This is the current state of implementation and it may change
+when [`remotecall_fetch`](@code-self-ref) is called. This is the current state of implementation and it may change
 for future Julia versions, as it is intended to make it possible to run up to N `Tasks` on M `Process`, aka
 [M:N Threading](https://en.wikipedia.org/wiki/Thread_(computing)#Models). Then a lock acquiring\releasing
 model for `nextidx` will be needed, as it is not safe to let multiple processes read-write a resource at
@@ -187,7 +187,7 @@ end
 
 In order to refer to `MyType` across all processes, `DummyModule.jl` needs to be loaded on
 every process.  Calling `include("DummyModule.jl")` loads it only on a single process.  To
-load it on every process, use the [`@everywhere`](@ref) macro (starting Julia with `julia -p
+load it on every process, use the [`@everywhere`](@code-self-ref) macro (starting Julia with `julia -p
 2`):
 
 ```julia-repl
@@ -198,7 +198,7 @@ loaded
 ```
 
 As usual, this does not bring `DummyModule` into scope on any of the process, which requires
-[`using`](@ref) or [`import`](@ref).  Moreover, when `DummyModule` is brought into scope on one process, it
+[`using`](@code-self-ref) or [`import`](@code-self-ref).  Moreover, when `DummyModule` is brought into scope on one process, it
 is not on any other:
 
 ```julia-repl
@@ -236,7 +236,7 @@ like a process providing an interactive prompt.
 
 Finally, if `DummyModule.jl` is not a standalone file but a package, then `using
 DummyModule` will _load_ `DummyModule.jl` on all processes, but only bring it into scope on
-the process where [`using`](@ref) was called.
+the process where [`using`](@code-self-ref) was called.
 
 ## Starting and managing worker processes
 
@@ -250,7 +250,7 @@ The base Julia installation has in-built support for two types of clusters:
     to 1. The optional `bind-to bind_addr[:port]` specifies the IP address and port that other workers
     should use to connect to this worker.
 
-Functions [`addprocs`](@ref), [`rmprocs`](@ref), [`workers`](@ref), and others are available
+Functions [`addprocs`](@code-self-ref), [`rmprocs`](@code-self-ref), [`workers`](@code-self-ref), and others are available
 as a programmatic means of adding, removing and querying the processes in a cluster.
 
 ```julia-repl
@@ -262,7 +262,7 @@ julia> addprocs(2)
  3
 ```
 
-Module [`Distributed`](@ref man-distributed) must be explicitly loaded on the master process before invoking [`addprocs`](@ref).
+Module [`Distributed`](@ref man-distributed) must be explicitly loaded on the master process before invoking [`addprocs`](@code-self-ref).
 It is automatically made available on the worker processes.
 
 Note that workers do not run a `~/.julia/config/startup.jl` startup script, nor do they synchronize
@@ -280,8 +280,8 @@ the number of messages and the amount of data sent is critical to achieving perf
 To this end, it is important to understand the data movement performed by Julia's various distributed
 programming constructs.
 
-[`fetch`](@ref) can be considered an explicit data movement operation, since it directly asks
-that an object be moved to the local machine. [`@spawnat`](@ref) (and a few related constructs)
+[`fetch`](@code-self-ref) can be considered an explicit data movement operation, since it directly asks
+that an object be moved to the local machine. [`@spawnat`](@code-self-ref) (and a few related constructs)
 also moves data, but this is not as obvious, hence it can be called an implicit data movement
 operation. Consider these two approaches to constructing and squaring a random matrix:
 
@@ -307,7 +307,7 @@ julia> Bref = @spawnat :any rand(1000,1000)^2;
 julia> fetch(Bref);
 ```
 
-The difference seems trivial, but in fact is quite significant due to the behavior of [`@spawnat`](@ref).
+The difference seems trivial, but in fact is quite significant due to the behavior of [`@spawnat`](@code-self-ref).
 In the first method, a random matrix is constructed locally, then sent to another process where
 it is squared. In the second method, a random matrix is both constructed and squared on another
 process. Therefore the second method sends much less data than the first.
@@ -316,14 +316,14 @@ In this toy example, the two methods are easy to distinguish and choose from. Ho
 program designing data movement might require more thought and likely some measurement. For example,
 if the first process needs matrix `A` then the first method might be better. Or, if computing
 `A` is expensive and only the current process has it, then moving it to another process might
-be unavoidable. Or, if the current process has very little to do between the [`@spawnat`](@ref)
+be unavoidable. Or, if the current process has very little to do between the [`@spawnat`](@code-self-ref)
 and `fetch(Bref)`, it might be better to eliminate the parallelism altogether. Or imagine `rand(1000,1000)`
-is replaced with a more expensive operation. Then it might make sense to add another [`@spawnat`](@ref)
+is replaced with a more expensive operation. Then it might make sense to add another [`@spawnat`](@code-self-ref)
 statement just for this step.
 
 ## Global variables
-Expressions executed remotely via [`@spawnat`](@ref), or closures specified for remote execution using
-[`remotecall`](@ref) may refer to global variables. Global bindings under module `Main` are treated
+Expressions executed remotely via [`@spawnat`](@code-self-ref), or closures specified for remote execution using
+[`remotecall`](@code-self-ref) may refer to global variables. Global bindings under module `Main` are treated
 a little differently compared to global bindings in other modules. Consider the following code
 snippet:
 
@@ -332,10 +332,10 @@ A = rand(10,10)
 remotecall_fetch(()->sum(A), 2)
 ```
 
-In this case [`sum`](@ref) MUST be defined in the remote process.
+In this case [`sum`](@code-self-ref) MUST be defined in the remote process.
 Note that `A` is a global variable defined in the local workspace. Worker 2 does not have a variable called
 `A` under `Main`. The act of shipping the closure `()->sum(A)` to worker 2 results in `Main.A` being defined
-on 2. `Main.A` continues to exist on worker 2 even after the call [`remotecall_fetch`](@ref) returns. Remote calls
+on 2. `Main.A` continues to exist on worker 2 even after the call [`remotecall_fetch`](@code-self-ref) returns. Remote calls
 with embedded global references (under `Main` module only) manage globals as follows:
 
 - New global bindings are created on destination workers if they are referenced as part of a remote call.
@@ -359,7 +359,7 @@ with embedded global references (under `Main` module only) manage globals as fol
 
 As you may have realized, while memory associated with globals may be collected when they are reassigned
 on the master, no such action is taken on the workers as the bindings continue to be valid.
-[`clear!`](@ref) can be used to manually reassign specific globals on remote nodes to `nothing` once
+[`clear!`](@code-self-ref) can be used to manually reassign specific globals on remote nodes to `nothing` once
 they are no longer required. This will release any memory associated with them as part of a regular garbage
 collection cycle.
 
@@ -396,7 +396,7 @@ and hence a binding for `B` does not exist on worker 2.
 
 Fortunately, many useful parallel computations do not require data movement. A common example
 is a Monte Carlo simulation, where multiple processes can handle independent simulation trials
-simultaneously. We can use [`@spawnat`](@ref) to flip coins on two processes. First, write the following
+simultaneously. We can use [`@spawnat`](@code-self-ref) to flip coins on two processes. First, write the following
 function in `count_heads.jl`:
 
 ```julia
@@ -435,9 +435,9 @@ for `f` to be associative, so that it does not matter what order the operations 
 in.
 
 Notice that our use of this pattern with `count_heads` can be generalized. We used two explicit
-[`@spawnat`](@ref) statements, which limits the parallelism to two processes. To run on any number
+[`@spawnat`](@code-self-ref) statements, which limits the parallelism to two processes. To run on any number
 of processes, we can use a *parallel for loop*, running in distributed memory, which can be written
-in Julia using [`@distributed`](@ref) like this:
+in Julia using [`@distributed`](@code-self-ref) like this:
 
 ```julia
 nheads = @distributed (+) for i = 1:200000000
@@ -491,12 +491,12 @@ Here each iteration applies `f` to a randomly-chosen sample from a vector `a` sh
 As you could see, the reduction operator can be omitted if it is not needed. In that case, the
 loop executes asynchronously, i.e. it spawns independent tasks on all available workers and returns
 an array of [`Future`](@ref Distributed.Future) immediately without waiting for completion. The caller can wait for
-the [`Future`](@ref Distributed.Future) completions at a later point by calling [`fetch`](@ref) on them, or wait
-for completion at the end of the loop by prefixing it with [`@sync`](@ref), like `@sync @distributed for`.
+the [`Future`](@ref Distributed.Future) completions at a later point by calling [`fetch`](@code-self-ref) on them, or wait
+for completion at the end of the loop by prefixing it with [`@sync`](@code-self-ref), like `@sync @distributed for`.
 
 In some cases no reduction operator is needed, and we merely wish to apply a function to all integers
 in some range (or, more generally, to all elements in some collection). This is another useful
-operation called *parallel map*, implemented in Julia as the [`pmap`](@ref) function. For example,
+operation called *parallel map*, implemented in Julia as the [`pmap`](@code-self-ref) function. For example,
 we could compute the singular values of several large random matrices in parallel as follows:
 
 ```julia-repl
@@ -505,9 +505,9 @@ julia> M = Matrix{Float64}[rand(1000,1000) for i = 1:10];
 julia> pmap(svdvals, M);
 ```
 
-Julia's [`pmap`](@ref) is designed for the case where each function call does a large amount
+Julia's [`pmap`](@code-self-ref) is designed for the case where each function call does a large amount
 of work. In contrast, `@distributed for` can handle situations where each iteration is tiny, perhaps
-merely summing two numbers. Only worker processes are used by both [`pmap`](@ref) and `@distributed for`
+merely summing two numbers. Only worker processes are used by both [`pmap`](@code-self-ref) and `@distributed for`
 for the parallel computation. In case of `@distributed for`, the final reduction is done on the calling
 process.
 
@@ -516,11 +516,11 @@ process.
 Remote references always refer to an implementation of an `AbstractChannel`.
 
 A concrete implementation of an `AbstractChannel` (like `Channel`), is required to implement
-[`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref) and [`wait`](@ref).
+[`put!`](@code-self-ref), [`take!`](@code-self-ref), [`fetch`](@code-self-ref), [`isready`](@code-self-ref) and [`wait`](@code-self-ref).
 The remote object referred to by a [`Future`](@ref Distributed.Future) is stored in a `Channel{Any}(1)`, i.e., a
 `Channel` of size 1 capable of holding objects of `Any` type.
 
-[`RemoteChannel`](@ref), which is rewritable, can point to any type and size of channels, or any
+[`RemoteChannel`](@code-self-ref), which is rewritable, can point to any type and size of channels, or any
 other implementation of an `AbstractChannel`.
 
 The constructor `RemoteChannel(f::Function, pid)()` allows us to construct references to channels
@@ -530,10 +530,10 @@ return an `AbstractChannel`.
 For example, `RemoteChannel(()->Channel{Int}(10), pid)`, will return a reference to a channel
 of type `Int` and size 10. The channel exists on worker `pid`.
 
-Methods [`put!`](@ref), [`take!`](@ref), [`fetch`](@ref), [`isready`](@ref) and [`wait`](@ref)
-on a [`RemoteChannel`](@ref) are proxied onto the backing store on the remote process.
+Methods [`put!`](@code-self-ref), [`take!`](@code-self-ref), [`fetch`](@code-self-ref), [`isready`](@code-self-ref) and [`wait`](@code-self-ref)
+on a [`RemoteChannel`](@code-self-ref) are proxied onto the backing store on the remote process.
 
-[`RemoteChannel`](@ref) can thus be used to refer to user implemented `AbstractChannel` objects.
+[`RemoteChannel`](@code-self-ref) can thus be used to refer to user implemented `AbstractChannel` objects.
 A simple example of this is provided in `dictchannel.jl` in the
 [Examples repository](https://github.com/JuliaAttic/Examples), which uses a dictionary as its
 remote store.
@@ -541,19 +541,19 @@ remote store.
 
 ## Channels and RemoteChannels
 
-  * A [`Channel`](@ref) is local to a process. Worker 2 cannot directly refer to a [`Channel`](@ref) on worker 3 and
-    vice-versa. A [`RemoteChannel`](@ref), however, can put and take values across workers.
-  * A [`RemoteChannel`](@ref) can be thought of as a *handle* to a [`Channel`](@ref).
-  * The process id, `pid`, associated with a [`RemoteChannel`](@ref) identifies the process where
-    the backing store, i.e., the backing [`Channel`](@ref) exists.
-  * Any process with a reference to a [`RemoteChannel`](@ref) can put and take items from the channel.
-    Data is automatically sent to (or retrieved from) the process a [`RemoteChannel`](@ref) is associated
+  * A [`Channel`](@code-self-ref) is local to a process. Worker 2 cannot directly refer to a [`Channel`](@code-self-ref) on worker 3 and
+    vice-versa. A [`RemoteChannel`](@code-self-ref), however, can put and take values across workers.
+  * A [`RemoteChannel`](@code-self-ref) can be thought of as a *handle* to a [`Channel`](@code-self-ref).
+  * The process id, `pid`, associated with a [`RemoteChannel`](@code-self-ref) identifies the process where
+    the backing store, i.e., the backing [`Channel`](@code-self-ref) exists.
+  * Any process with a reference to a [`RemoteChannel`](@code-self-ref) can put and take items from the channel.
+    Data is automatically sent to (or retrieved from) the process a [`RemoteChannel`](@code-self-ref) is associated
     with.
-  * Serializing  a [`Channel`](@ref) also serializes any data present in the channel. Deserializing it therefore
+  * Serializing  a [`Channel`](@code-self-ref) also serializes any data present in the channel. Deserializing it therefore
     effectively makes a copy of the original object.
-  * On the other hand, serializing a [`RemoteChannel`](@ref) only involves the serialization of an
-    identifier that identifies the location and instance of [`Channel`](@ref) referred to by the handle. A
-    deserialized [`RemoteChannel`](@ref) object (on any worker), therefore also points to the same
+  * On the other hand, serializing a [`RemoteChannel`](@code-self-ref) only involves the serialization of an
+    identifier that identifies the location and instance of [`Channel`](@code-self-ref) referred to by the handle. A
+    deserialized [`RemoteChannel`](@code-self-ref) object (on any worker), therefore also points to the same
     backing store as the original.
 
 The channels example from above can be modified for interprocess communication,
@@ -620,8 +620,8 @@ Objects referred to by remote references can be freed only when *all* held refer
 in the cluster are deleted.
 
 The node where the value is stored keeps track of which of the workers have a reference to it.
-Every time a [`RemoteChannel`](@ref) or a (unfetched) [`Future`](@ref Distributed.Future) is serialized to a worker,
-the node pointed to by the reference is notified. And every time a [`RemoteChannel`](@ref) or
+Every time a [`RemoteChannel`](@code-self-ref) or a (unfetched) [`Future`](@ref Distributed.Future) is serialized to a worker,
+the node pointed to by the reference is notified. And every time a [`RemoteChannel`](@code-self-ref) or
 a (unfetched) [`Future`](@ref Distributed.Future) is garbage collected locally, the node owning the value is again
 notified. This is implemented in an internal cluster aware serializer. Remote references are only
 valid in the context of a running cluster. Serializing and deserializing references to and from
@@ -631,7 +631,7 @@ The notifications are done via sending of "tracking" messages--an "add reference
 a reference is serialized to a different process and a "delete reference" message when a reference
 is locally garbage collected.
 
-Since [`Future`](@ref Distributed.Future)s are write-once and cached locally, the act of [`fetch`](@ref)ing a
+Since [`Future`](@ref Distributed.Future)s are write-once and cached locally, the act of [`fetch`](@code-self-ref)ing a
 [`Future`](@ref Distributed.Future) also updates reference tracking information on the node owning the value.
 
 The node which owns the value frees it once all references to it are cleared.
@@ -644,10 +644,10 @@ of the object and the current memory pressure in the system.
 
 In case of remote references, the size of the local reference object is quite small, while the
 value stored on the remote node may be quite large. Since the local object may not be collected
-immediately, it is a good practice to explicitly call [`finalize`](@ref) on local instances
-of a [`RemoteChannel`](@ref), or on unfetched [`Future`](@ref Distributed.Future)s. Since calling [`fetch`](@ref)
+immediately, it is a good practice to explicitly call [`finalize`](@code-self-ref) on local instances
+of a [`RemoteChannel`](@code-self-ref), or on unfetched [`Future`](@ref Distributed.Future)s. Since calling [`fetch`](@code-self-ref)
 on a [`Future`](@ref Distributed.Future) also removes its reference from the remote store, this is not required on
-fetched [`Future`](@ref Distributed.Future)s. Explicitly calling [`finalize`](@ref) results in an immediate message
+fetched [`Future`](@ref Distributed.Future)s. Explicitly calling [`finalize`](@code-self-ref) results in an immediate message
 sent to the remote node to go ahead and remove its reference to the value.
 
 Once finalized, a reference becomes invalid and cannot be used in any further calls.
@@ -656,7 +656,7 @@ Once finalized, a reference becomes invalid and cannot be used in any further ca
 ## Local invocations
 
 Data is necessarily copied over to the remote node for execution. This is the case for both
-remotecalls and when data is stored to a [`RemoteChannel`](@ref) / [`Future`](@ref Distributed.Future) on
+remotecalls and when data is stored to a [`RemoteChannel`](@code-self-ref) / [`Future`](@ref Distributed.Future) on
 a different node. As expected, this results in a copy of the serialized objects
 on the remote node. However, when the destination node is the local node, i.e.
 the calling process id is the same as the remote node id, it is executed
@@ -704,7 +704,7 @@ julia> println("Num Unique objects : ", length(unique(map(objectid, result))));
 Num Unique objects : 3
 ```
 
-As can be seen, [`put!`](@ref) on a locally owned [`RemoteChannel`](@ref) with the same
+As can be seen, [`put!`](@code-self-ref) on a locally owned [`RemoteChannel`](@code-self-ref) with the same
 object `v` modified between calls results in the same single object instance stored. As
 opposed to copies of `v` being created when the node owning `rc` is a different node.
 
@@ -747,21 +747,21 @@ will always operate on copies of arguments.
 
 Shared Arrays use system shared memory to map the same array across many processes. While there
 are some similarities to a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl), the
-behavior of a [`SharedArray`](@ref) is quite different. In a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl),
+behavior of a [`SharedArray`](@code-self-ref) is quite different. In a [`DArray`](https://github.com/JuliaParallel/DistributedArrays.jl),
 each process has local access to just a chunk of the data, and no two processes share the same
-chunk; in contrast, in a [`SharedArray`](@ref) each "participating" process has access to the
-entire array.  A [`SharedArray`](@ref) is a good choice when you want to have a large amount of
+chunk; in contrast, in a [`SharedArray`](@code-self-ref) each "participating" process has access to the
+entire array.  A [`SharedArray`](@code-self-ref) is a good choice when you want to have a large amount of
 data jointly accessible to two or more processes on the same machine.
 
 Shared Array support is available via module `SharedArrays` which must be explicitly loaded on
 all participating workers.
 
-[`SharedArray`](@ref) indexing (assignment and accessing values) works just as with regular arrays,
+[`SharedArray`](@code-self-ref) indexing (assignment and accessing values) works just as with regular arrays,
 and is efficient because the underlying memory is available to the local process. Therefore,
-most algorithms work naturally on [`SharedArray`](@ref)s, albeit in single-process mode. In cases
-where an algorithm insists on an [`Array`](@ref) input, the underlying array can be retrieved
-from a [`SharedArray`](@ref) by calling [`sdata`](@ref). For other `AbstractArray` types, [`sdata`](@ref)
-just returns the object itself, so it's safe to use [`sdata`](@ref) on any `Array`-type object.
+most algorithms work naturally on [`SharedArray`](@code-self-ref)s, albeit in single-process mode. In cases
+where an algorithm insists on an [`Array`](@code-self-ref) input, the underlying array can be retrieved
+from a [`SharedArray`](@code-self-ref) by calling [`sdata`](@code-self-ref). For other `AbstractArray` types, [`sdata`](@code-self-ref)
+just returns the object itself, so it's safe to use [`sdata`](@code-self-ref) on any `Array`-type object.
 
 The constructor for a shared array is of the form:
 
@@ -772,7 +772,7 @@ SharedArray{T,N}(dims::NTuple; init=false, pids=Int[])
 which creates an `N`-dimensional shared array of a bits type `T` and size `dims` across the processes specified
 by `pids`. Unlike distributed arrays, a shared array is accessible only from those participating
 workers specified by the `pids` named argument (and the creating process too, if it is on the
-same host). Note that only elements that are [`isbits`](@ref) are supported in a SharedArray.
+same host). Note that only elements that are [`isbits`](@code-self-ref) are supported in a SharedArray.
 
 If an `init` function, of signature `initfn(S::SharedArray)`, is specified, it is called on all
 the participating workers. You can specify that each worker runs the `init` function on a distinct
@@ -807,7 +807,7 @@ julia> S
  2  7  4  4
 ```
 
-[`SharedArrays.localindices`](@ref) provides disjoint one-dimensional ranges of indices, and is sometimes
+[`SharedArrays.localindices`](@code-self-ref) provides disjoint one-dimensional ranges of indices, and is sometimes
 convenient for splitting up tasks among processes. You can, of course, divide the work any way
 you wish:
 
@@ -886,7 +886,7 @@ Now let's compare three different versions, one that runs in a single process:
 julia> advection_serial!(q, u) = advection_chunk!(q, u, 1:size(q,1), 1:size(q,2), 1:size(q,3)-1);
 ```
 
-one that uses [`@distributed`](@ref):
+one that uses [`@distributed`](@code-self-ref):
 
 ```julia-repl
 julia> function advection_parallel!(q, u)
@@ -922,7 +922,7 @@ julia> q = SharedArray{Float64,3}((500,500,500));
 julia> u = SharedArray{Float64,3}((500,500,500));
 ```
 
-Run the functions once to JIT-compile and [`@time`](@ref) them on the second run:
+Run the functions once to JIT-compile and [`@time`](@code-self-ref) them on the second run:
 
 ```julia-repl
 julia> @time advection_serial!(q, u);
@@ -968,11 +968,11 @@ A Julia cluster has the following characteristics:
 Connections between workers (using the in-built TCP/IP transport) is established in the following
 manner:
 
-  * [`addprocs`](@ref) is called on the master process with a `ClusterManager` object.
-  * [`addprocs`](@ref) calls the appropriate [`launch`](@ref) method which spawns required number
+  * [`addprocs`](@code-self-ref) is called on the master process with a `ClusterManager` object.
+  * [`addprocs`](@code-self-ref) calls the appropriate [`launch`](@code-self-ref) method which spawns required number
     of worker processes on appropriate machines.
-  * Each worker starts listening on a free port and writes out its host and port information to [`stdout`](@ref).
-  * The cluster manager captures the [`stdout`](@ref) of each worker and makes it available to the
+  * Each worker starts listening on a free port and writes out its host and port information to [`stdout`](@code-self-ref).
+  * The cluster manager captures the [`stdout`](@code-self-ref) of each worker and makes it available to the
     master process.
   * The master process parses this information and sets up TCP/IP connections to each worker.
   * Every worker is also notified of other workers in the cluster.
@@ -980,13 +980,13 @@ manner:
   * In this way a mesh network is established, wherein every worker is directly connected with every
     other worker.
 
-While the default transport layer uses plain [`TCPSocket`](@ref), it is possible for a Julia cluster to
+While the default transport layer uses plain [`TCPSocket`](@code-self-ref), it is possible for a Julia cluster to
 provide its own transport.
 
 Julia provides two in-built cluster managers:
 
-  * `LocalManager`, used when [`addprocs()`](@ref) or [`addprocs(np::Integer)`](@ref) are called
-  * `SSHManager`, used when [`addprocs(hostnames::Array)`](@ref) is called with a list of hostnames
+  * `LocalManager`, used when [`addprocs()`](@code-self-ref) or [`addprocs(np::Integer)`](@code-self-ref) are called
+  * `SSHManager`, used when [`addprocs(hostnames::Array)`](@code-self-ref) is called with a list of hostnames
 
 `LocalManager` is used to launch additional workers on the same host, thereby leveraging multi-core
 and multi-processor hardware.
@@ -994,8 +994,8 @@ and multi-processor hardware.
 Thus, a minimal cluster manager would need to:
 
   * be a subtype of the abstract `ClusterManager`
-  * implement [`launch`](@ref), a method responsible for launching new workers
-  * implement [`manage`](@ref), which is called at various events during a worker's lifetime (for
+  * implement [`launch`](@code-self-ref), a method responsible for launching new workers
+  * implement [`manage`](@code-self-ref), which is called at various events during a worker's lifetime (for
     example, sending an interrupt signal)
 
 [`addprocs(manager::FooManager)`](@ref addprocs) requires `FooManager` to implement:
@@ -1027,15 +1027,15 @@ function manage(manager::LocalManager, id::Integer, config::WorkerConfig, op::Sy
 end
 ```
 
-The [`launch`](@ref) method takes the following arguments:
+The [`launch`](@code-self-ref) method takes the following arguments:
 
-  * `manager::ClusterManager`: the cluster manager that [`addprocs`](@ref) is called with
-  * `params::Dict`: all the keyword arguments passed to [`addprocs`](@ref)
+  * `manager::ClusterManager`: the cluster manager that [`addprocs`](@code-self-ref) is called with
+  * `params::Dict`: all the keyword arguments passed to [`addprocs`](@code-self-ref)
   * `launched::Array`: the array to append one or more `WorkerConfig` objects to
   * `c::Condition`: the condition variable to be notified as and when workers are launched
 
-The [`launch`](@ref) method is called asynchronously in a separate task. The termination of
-this task signals that all requested workers have been launched. Hence the [`launch`](@ref)
+The [`launch`](@code-self-ref) method is called asynchronously in a separate task. The termination of
+this task signals that all requested workers have been launched. Hence the [`launch`](@code-self-ref)
 function MUST exit as soon as all the requested workers have been launched.
 
 Newly launched workers are connected to each other and the master process in an all-to-all manner.
@@ -1047,7 +1047,7 @@ unspecified, i.e, with the `--worker` option, the worker tries to read it from i
  `LocalManager` and `SSHManager` both pass the cookie to newly launched workers via their
  standard inputs.
 
-By default a worker will listen on a free port at the address returned by a call to [`getipaddr()`](@ref).
+By default a worker will listen on a free port at the address returned by a call to [`getipaddr()`](@code-self-ref).
 A specific address to listen on may be specified by optional argument `--bind-to bind_addr[:port]`.
 This is useful for multi-homed hosts.
 
@@ -1055,7 +1055,7 @@ As an example of a non-TCP/IP transport, an implementation may choose to use MPI
 `--worker` must NOT be specified. Instead, newly launched workers should call `init_worker(cookie)`
 before using any of the parallel constructs.
 
-For every worker launched, the [`launch`](@ref) method must add a `WorkerConfig` object (with
+For every worker launched, the [`launch`](@code-self-ref) method must add a `WorkerConfig` object (with
 appropriate fields initialized) to `launched`
 
 ```julia
@@ -1122,7 +1122,7 @@ connected to. For example, consider a Julia cluster of 32 processes in an all-to
 
   * Each Julia process thus has 31 communication tasks.
   * Each task handles all incoming messages from a single remote worker in a message-processing loop.
-  * The message-processing loop waits on an `IO` object (for example, a [`TCPSocket`](@ref) in the default
+  * The message-processing loop waits on an `IO` object (for example, a [`TCPSocket`](@code-self-ref) in the default
     implementation), reads an entire message, processes it and waits for the next one.
   * Sending messages to a process is done directly from any Julia task--not just communication tasks--again,
     via the appropriate `IO` object.
@@ -1143,7 +1143,7 @@ the other to write data that needs to be sent to worker `pid`. Custom cluster ma
 an in-memory `BufferStream` as the plumbing to proxy data between the custom, possibly non-`IO`
 transport and Julia's in-built parallel infrastructure.
 
-A `BufferStream` is an in-memory [`IOBuffer`](@ref) which behaves like an `IO`--it is a stream which can
+A `BufferStream` is an in-memory [`IOBuffer`](@code-self-ref) which behaves like an `IO`--it is a stream which can
 be handled asynchronously.
 
 The folder `clustermanager/0mq` in the [Examples repository](https://github.com/JuliaAttic/Examples)
@@ -1160,8 +1160,8 @@ When using custom transports:
     must be called. This launches a new task that handles reading and writing of messages from/to
     the worker represented by the `IO` objects.
   * `init_worker(cookie, manager::FooManager)` *must* be called as part of worker process initialization.
-  * Field `connect_at::Any` in `WorkerConfig` can be set by the cluster manager when [`launch`](@ref)
-    is called. The value of this field is passed in all [`connect`](@ref) callbacks. Typically,
+  * Field `connect_at::Any` in `WorkerConfig` can be set by the cluster manager when [`launch`](@code-self-ref)
+    is called. The value of this field is passed in all [`connect`](@code-self-ref) callbacks. Typically,
     it carries information on *how to connect* to a worker. For example, the TCP/IP socket transport
     uses this field to specify the `(host, port)` tuple at which to connect to a worker.
 
@@ -1205,12 +1205,12 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
     Securing and encrypting all worker-worker traffic (via SSH) or encrypting individual messages
     can be done via a custom `ClusterManager`.
 
-  * If you specify `multiplex=true` as an option to [`addprocs`](@ref), SSH multiplexing is used to create
+  * If you specify `multiplex=true` as an option to [`addprocs`](@code-self-ref), SSH multiplexing is used to create
     a tunnel between the master and workers. If you have configured SSH multiplexing on your own and
     the connection has already been established, SSH multiplexing is used regardless of `multiplex`
     option. If multiplexing is enabled, forwarding is set by using the existing connection
     (`-O forward` option in ssh). This is beneficial if your servers require password authentication;
-    you can avoid authentication in Julia by logging in to the server ahead of [`addprocs`](@ref). The control
+    you can avoid authentication in Julia by logging in to the server ahead of [`addprocs`](@code-self-ref). The control
     socket will be located at `~/.ssh/julia-%r@%h:%p` during the session unless the existing multiplexing
     connection is used. Note that bandwidth may be limited if you create multiple processes on a node
     and enable multiplexing, because in that case processes share a single multiplexing TCP connection.
@@ -1220,14 +1220,14 @@ requirements for the inbuilt `LocalManager` and `SSHManager`:
 All processes in a cluster share the same cookie which, by default, is a randomly generated string
 on the master process:
 
-  * [`cluster_cookie()`](@ref) returns the cookie, while `cluster_cookie(cookie)()` sets
+  * [`cluster_cookie()`](@code-self-ref) returns the cookie, while `cluster_cookie(cookie)()` sets
     it and returns the new cookie.
   * All connections are authenticated on both sides to ensure that only workers started by the master
     are allowed to connect to each other.
   * The cookie may be passed to the workers at startup via argument `--worker=<cookie>`. If argument
     `--worker` is specified without the cookie, the worker tries to read the cookie from its
-    standard input ([`stdin`](@ref)). The `stdin` is closed immediately after the cookie is retrieved.
-  * `ClusterManager`s can retrieve the cookie on the master by calling [`cluster_cookie()`](@ref).
+    standard input ([`stdin`](@code-self-ref)). The `stdin` is closed immediately after the cookie is retrieved.
+  * `ClusterManager`s can retrieve the cookie on the master by calling [`cluster_cookie()`](@code-self-ref).
     Cluster managers not using the default TCP/IP transport (and hence not specifying `--worker`)
     must call `init_worker(cookie, manager)` with the same cookie as on the master.
 
@@ -1236,7 +1236,7 @@ For example, cookies can be pre-shared and hence not specified as a startup argu
 
 ## Specifying Network Topology (Experimental)
 
-The keyword argument `topology` passed to [`addprocs`](@ref) is used to specify how the workers must be
+The keyword argument `topology` passed to [`addprocs`](@code-self-ref) is used to specify how the workers must be
 connected to each other:
 
   * `:all_to_all`, the default: all workers are connected to each other.
@@ -1274,7 +1274,7 @@ A mention must be made of Julia's GPU programming ecosystem, which includes:
 In the following example we will use both `DistributedArrays.jl` and `CuArrays.jl` to distribute an array across multiple
 processes by first casting it through `distribute()` and `CuArray()`.
 
-Remember when importing `DistributedArrays.jl` to import it across all processes using [`@everywhere`](@ref)
+Remember when importing `DistributedArrays.jl` to import it across all processes using [`@everywhere`](@code-self-ref)
 
 
 ```julia-repl

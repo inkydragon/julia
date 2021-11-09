@@ -64,14 +64,14 @@ f (generic function with 1 method)
 ```
 
 This function definition applies only to calls where `x` and `y` are both values of type
-[`Float64`](@ref):
+[`Float64`](@code-self-ref):
 
 ```jldoctest fofxy
 julia> f(2.0, 3.0)
 7.0
 ```
 
-Applying it to any other types of arguments will result in a [`MethodError`](@ref):
+Applying it to any other types of arguments will result in a [`MethodError`](@code-self-ref):
 
 ```jldoctest fofxy
 julia> f(2.0, 3)
@@ -93,7 +93,7 @@ julia> f("2.0", "3.0")
 ERROR: MethodError: no method matching f(::String, ::String)
 ```
 
-As you can see, the arguments must be precisely of type [`Float64`](@ref). Other numeric
+As you can see, the arguments must be precisely of type [`Float64`](@code-self-ref). Other numeric
 types, such as integers or 32-bit floating-point values, are not automatically converted
 to 64-bit floating-point, nor are strings parsed as numbers. Because `Float64` is a concrete
 type and concrete types cannot be subclassed in Julia, such a definition can only be applied
@@ -108,7 +108,7 @@ julia> f(2.0, 3)
 1.0
 ```
 
-This method definition applies to any pair of arguments that are instances of [`Number`](@ref).
+This method definition applies to any pair of arguments that are instances of [`Number`](@code-self-ref).
 They need not be of the same type, so long as they are each numeric values. The problem of
 handling disparate numeric types is delegated to the arithmetic operations in the
 expression `2x - y`.
@@ -119,7 +119,7 @@ function object, and subsequent method definitions add new methods to the existi
 The most specific method definition matching the number and types of the arguments will be executed
 when the function is applied. Thus, the two method definitions above, taken together, define the
 behavior for `f` over all pairs of instances of the abstract type `Number` -- but with a different
-behavior specific to pairs of [`Float64`](@ref) values. If one of the arguments is a 64-bit
+behavior specific to pairs of [`Float64`](@code-self-ref) values. If one of the arguments is a 64-bit
 float but the other one is not, then the `f(Float64,Float64)` method cannot be called and
 the more general `f(Number,Number)` method must be used:
 
@@ -144,7 +144,7 @@ however, shows how clever application of sufficiently advanced technology can be
 from magic. [^Clarke61]
 
 For non-numeric values, and for fewer or more than two arguments, the function `f` remains undefined,
-and applying it will still result in a [`MethodError`](@ref):
+and applying it will still result in a [`MethodError`](@code-self-ref):
 
 ```jldoctest fofxy
 julia> f("foo", 3)
@@ -168,7 +168,7 @@ f (generic function with 2 methods)
 ```
 
 This output tells us that `f` is a function object with two methods. To find out what the signatures
-of those methods are, use the [`methods`](@ref) function:
+of those methods are, use the [`methods`](@code-self-ref) function:
 
 ```jldoctest fofxy
 julia> methods(f)
@@ -264,7 +264,7 @@ Possible fix, define
 ```
 
 Here the call `g(2.0, 3.0)` could be handled by either the `g(Float64, Any)` or the `g(Any, Float64)`
-method, and neither is more specific than the other. In such cases, Julia raises a [`MethodError`](@ref)
+method, and neither is more specific than the other. In such cases, Julia raises a [`MethodError`](@code-self-ref)
 rather than arbitrarily picking a method. You can avoid method ambiguities by specifying an appropriate
 method for the intersection case:
 
@@ -368,7 +368,7 @@ Stacktrace:
 ```
 
 As you can see, the type of the appended element must match the element type of the vector it
-is appended to, or else a [`MethodError`](@ref) is raised. In the following example, the method type parameter
+is appended to, or else a [`MethodError`](@code-self-ref) is raised. In the following example, the method type parameter
 `T` is used as the return value:
 
 ```jldoctest
@@ -478,7 +478,7 @@ In the example above, we see that the "current world" (in which the method `newf
 is one greater than the task-local "runtime world" that was fixed when the execution of `tryeval` started.
 
 Sometimes it is necessary to get around this (for example, if you are implementing the above REPL).
-Fortunately, there is an easy solution: call the function using [`Base.invokelatest`](@ref):
+Fortunately, there is an easy solution: call the function using [`Base.invokelatest`](@code-self-ref):
 
 ```jldoctest
 julia> function tryeval2()
@@ -622,8 +622,8 @@ output = similar(input, Eltype)
 
 As an extension of this, in cases where the algorithm needs a copy of
 the input array,
-[`convert`](@ref) is insufficient as the return value may alias the original input.
-Combining [`similar`](@ref) (to make the output array) and [`copyto!`](@ref) (to fill it with the input data)
+[`convert`](@code-self-ref) is insufficient as the return value may alias the original input.
+Combining [`similar`](@code-self-ref) (to make the output array) and [`copyto!`](@code-self-ref) (to fill it with the input data)
 is a generic way to express the requirement for a mutable copy of the input argument:
 
 ```julia
@@ -672,10 +672,10 @@ function arguments may belong to.  If this function is pure there is
 no impact on performance compared to normal dispatch.
 
 The example in the previous section glossed over the implementation details of
-[`map`](@ref) and [`promote`](@ref), which both operate in terms of these traits.
+[`map`](@code-self-ref) and [`promote`](@code-self-ref), which both operate in terms of these traits.
 When iterating over a matrix, such as in the implementation of `map`,
 one important question is what order to use to traverse the data.
-When `AbstractArray` subtypes implement the [`Base.IndexStyle`](@ref) trait,
+When `AbstractArray` subtypes implement the [`Base.IndexStyle`](@code-self-ref) trait,
 other functions such as `map` can dispatch on this information to pick
 the best algorithm (see [Abstract Array Interface](@ref man-interface-array)).
 This means that each subtype does not need to implement a custom version of `map`,
@@ -690,9 +690,9 @@ map(::Base.IndexCartesian, f, a::AbstractArray, b::AbstractArray) = ...
 map(::Base.IndexLinear, f, a::AbstractArray, b::AbstractArray) = ...
 ```
 
-This trait-based approach is also present in the [`promote`](@ref)
+This trait-based approach is also present in the [`promote`](@code-self-ref)
 mechanism employed by the scalar `+`.
-It uses [`promote_type`](@ref), which returns the optimal common type to
+It uses [`promote_type`](@code-self-ref), which returns the optimal common type to
 compute the operation given the two types of the operands.
 This makes it possible to reduce the problem of implementing every function for every pair of possible type arguments,
 to the much smaller problem of implementing a conversion operation from each type to a common type,
@@ -705,7 +705,7 @@ The discussion of trait-based promotion provides a transition into our next desi
 computing the output element type for a matrix operation.
 
 For implementing primitive operations, such as addition,
-we use the [`promote_type`](@ref) function to compute the desired output type.
+we use the [`promote_type`](@code-self-ref) function to compute the desired output type.
 (As before, we saw this at work in the `promote` call in the call to `+`).
 
 For more complex functions on matrices, it may be necessary to compute the expected return

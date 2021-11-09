@@ -94,7 +94,7 @@ As in the example above, we recommend following some simple conventions when wri
    a short list of these in a `See also` paragraph.
 
    ```
-   See also [`bar!`](@ref), [`baz`](@ref), [`baaz`](@ref).
+   See also [`bar!`](@code-self-ref), [`baz`](@code-self-ref), [`baaz`](@code-self-ref).
    ```
 6. Include any code examples in an `# Examples` section.
 
@@ -130,7 +130,7 @@ As in the example above, we recommend following some simple conventions when wri
        number generation related functionality, one option is to explicitly construct and seed your own
        RNG object (see [`Random`](@ref Random-Numbers)) and pass it to the functions you are doctesting.
 
-       Operating system word size ([`Int32`](@ref) or [`Int64`](@ref)) as well as path separator differences
+       Operating system word size ([`Int32`](@code-self-ref) or [`Int64`](@code-self-ref)) as well as path separator differences
        (`/` or `\`) will also affect the reproducibility of some doctests.
 
        Note that whitespace in your doctest is significant! The doctest will fail if you misalign the
@@ -583,7 +583,7 @@ Macro authors should take note that only macros that generate a single expressio
 support docstrings. If a macro returns a block containing multiple subexpressions then the subexpression
 that should be documented must be marked using the [`@__doc__`](@ref Core.@__doc__) macro.
 
-The [`@enum`](@ref) macro makes use of `@__doc__` to allow for documenting [`Enum`](@ref)s.
+The [`@enum`](@code-self-ref) macro makes use of `@__doc__` to allow for documenting [`Enum`](@code-self-ref)s.
 Examining its definition
 should serve as an example of how to use `@__doc__` correctly.
 

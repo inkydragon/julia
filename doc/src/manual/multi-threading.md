@@ -6,7 +6,7 @@ of Julia multi-threading features.
 ## Starting Julia with multiple threads
 
 By default, Julia starts up with a single thread of execution. This can be verified by using the
-command [`Threads.nthreads()`](@ref):
+command [`Threads.nthreads()`](@code-self-ref):
 
 ```jldoctest
 julia> Threads.nthreads()
@@ -41,7 +41,7 @@ julia> Threads.nthreads()
 4
 ```
 
-But we are currently on the master thread. To check, we use the function [`Threads.threadid`](@ref)
+But we are currently on the master thread. To check, we use the function [`Threads.threadid`](@code-self-ref)
 
 ```jldoctest
 julia> Threads.threadid()
@@ -69,7 +69,7 @@ julia> Threads.threadid()
     that are spawned using the `-p`/`--procs` or `--machine-file` command line options.
     For example, `julia -p2 -t2` spawns 1 main process with 2 worker processes, and all
     three processes have 2 threads enabled. For more fine grained control over worker
-    threads use [`addprocs`](@ref) and pass `-t`/`--threads` as `exeflags`.
+    threads use [`addprocs`](@code-self-ref) and pass `-t`/`--threads` as `exeflags`.
 
 ## Data-race freedom
 
@@ -139,7 +139,7 @@ julia> a = zeros(10)
 Let us operate on this array simultaneously using 4 threads. We'll have each thread write its
 thread ID into each location.
 
-Julia supports parallel loops using the [`Threads.@threads`](@ref) macro. This macro is affixed
+Julia supports parallel loops using the [`Threads.@threads`](@code-self-ref) macro. This macro is affixed
 in front of a `for` loop to indicate to Julia that the loop is a multi-threaded region:
 
 ```julia-repl
@@ -166,13 +166,13 @@ julia> a
  4.0
 ```
 
-Note that [`Threads.@threads`](@ref) does not have an optional reduction parameter like [`@distributed`](@ref).
+Note that [`Threads.@threads`](@code-self-ref) does not have an optional reduction parameter like [`@distributed`](@code-self-ref).
 
 ## Atomic Operations
 
 Julia supports accessing and modifying values *atomically*, that is, in a thread-safe way to avoid
 [race conditions](https://en.wikipedia.org/wiki/Race_condition). A value (which must be of a primitive
-type) can be wrapped as [`Threads.Atomic`](@ref) to indicate it must be accessed in this way.
+type) can be wrapped as [`Threads.Atomic`](@code-self-ref) to indicate it must be accessed in this way.
 Here we can see an example:
 
 ```julia-repl
@@ -270,14 +270,14 @@ by convention modify their arguments and thus are not pure.
 
 ## @threadcall
 
-External libraries, such as those called via [`ccall`](@ref), pose a problem for
+External libraries, such as those called via [`ccall`](@code-self-ref), pose a problem for
 Julia's task-based I/O mechanism.
 If a C library performs a blocking operation, that prevents the Julia scheduler
 from executing any other tasks until the call returns.
 (Exceptions are calls into custom C code that call back into Julia, which may then
-yield, or C code that calls `jl_yield()`, the C equivalent of [`yield`](@ref).)
+yield, or C code that calls `jl_yield()`, the C equivalent of [`yield`](@code-self-ref).)
 
-The [`@threadcall`](@ref) macro provides a way to avoid stalling execution in such
+The [`@threadcall`](@code-self-ref) macro provides a way to avoid stalling execution in such
 a scenario.
 It schedules a C function for execution in a separate thread. A threadpool with a
 default size of 4 is used for this. The size of the threadpool is controlled via environment variable

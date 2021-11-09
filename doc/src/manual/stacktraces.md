@@ -5,7 +5,7 @@ easy to use programmatically.
 
 ## Viewing a stack trace
 
-The primary function used to obtain a stack trace is [`stacktrace`](@ref):
+The primary function used to obtain a stack trace is [`stacktrace`](@code-self-ref):
 
 ```julia-repl
 6-element Array{Base.StackTraces.StackFrame,1}:
@@ -17,8 +17,8 @@ The primary function used to obtain a stack trace is [`stacktrace`](@ref):
  (::getfield(REPL, Symbol("##28#29")){REPL.REPLBackend})() at event.jl:92
 ```
 
-Calling [`stacktrace()`](@ref) returns a vector of [`StackTraces.StackFrame`](@ref) s. For ease of use, the
-alias [`StackTraces.StackTrace`](@ref) can be used in place of `Vector{StackFrame}`. (Examples with `[...]`
+Calling [`stacktrace()`](@code-self-ref) returns a vector of [`StackTraces.StackFrame`](@code-self-ref) s. For ease of use, the
+alias [`StackTraces.StackTrace`](@code-self-ref) can be used in place of `Vector{StackFrame}`. (Examples with `[...]`
 indicate that output may vary depending on how the code is run.)
 
 ```julia-repl
@@ -49,8 +49,8 @@ julia> grandparent()
 [...]
 ```
 
-Note that when calling [`stacktrace()`](@ref) you'll typically see a frame with `eval at boot.jl`.
-When calling [`stacktrace()`](@ref) from the REPL you'll also have a few extra frames in the stack
+Note that when calling [`stacktrace()`](@code-self-ref) you'll typically see a frame with `eval at boot.jl`.
+When calling [`stacktrace()`](@code-self-ref) from the REPL you'll also have a few extra frames in the stack
 from `REPL.jl`, usually looking something like this:
 
 ```julia-repl
@@ -70,10 +70,10 @@ julia> example()
 
 ## Extracting useful information
 
-Each [`StackTraces.StackFrame`](@ref) contains the function name, file name, line number, lambda info, a flag
+Each [`StackTraces.StackFrame`](@code-self-ref) contains the function name, file name, line number, lambda info, a flag
 indicating whether the frame has been inlined, a flag indicating whether it is a C function (by
 default C functions do not appear in the stack trace), and an integer representation of the pointer
-returned by [`backtrace`](@ref):
+returned by [`backtrace`](@code-self-ref):
 
 ```julia-repl
 julia> frame = stacktrace()[3]
@@ -129,13 +129,13 @@ julia> example()
 ```
 
 You may notice that in the example above the first stack frame points at line 4, where
-[`stacktrace`](@ref) is called, rather than line 2, where *bad_function* is called, and `bad_function`'s
-frame is missing entirely. This is understandable, given that [`stacktrace`](@ref) is called
+[`stacktrace`](@code-self-ref) is called, rather than line 2, where *bad_function* is called, and `bad_function`'s
+frame is missing entirely. This is understandable, given that [`stacktrace`](@code-self-ref) is called
 from the context of the *catch*. While in this example it's fairly easy to find the actual source
 of the error, in complex cases tracking down the source of the error becomes nontrivial.
 
-This can be remedied by passing the result of [`catch_backtrace`](@ref) to [`stacktrace`](@ref).
-Instead of returning callstack information for the current context, [`catch_backtrace`](@ref)
+This can be remedied by passing the result of [`catch_backtrace`](@code-self-ref) to [`stacktrace`](@code-self-ref).
+Instead of returning callstack information for the current context, [`catch_backtrace`](@code-self-ref)
 returns stack information for the context of the most recent exception:
 
 ```julia-repl
@@ -185,7 +185,7 @@ ERROR: Whoops!
 [...]
 ```
 
-## Exception stacks and [`current_exceptions`](@ref)
+## Exception stacks and [`current_exceptions`](@code-self-ref)
 
 !!! compat "Julia 1.1"
     Exception stacks requires at least Julia 1.1.
@@ -195,7 +195,7 @@ identify the root cause of a problem. The julia runtime supports this by pushing
 *exception stack* as it occurs. When the code exits a `catch` normally, any exceptions which were pushed onto the stack
 in the associated `try` are considered to be successfully handled and are removed from the stack.
 
-The stack of current exceptions can be accessed using the [`current_exceptions`](@ref) function. For example,
+The stack of current exceptions can be accessed using the [`current_exceptions`](@code-self-ref) function. For example,
 
 ```julia-repl
 julia> try
@@ -235,10 +235,10 @@ and are no longer accessible.
 The exception stack is stored on the `Task` where the exceptions occurred. When a task fails with uncaught exceptions,
 `current_exceptions(task)` may be used to inspect the exception stack for that task.
 
-## Comparison with [`backtrace`](@ref)
+## Comparison with [`backtrace`](@code-self-ref)
 
-A call to [`backtrace`](@ref) returns a vector of `Union{Ptr{Nothing}, Base.InterpreterIP}`, which may then be passed into
-[`stacktrace`](@ref) for translation:
+A call to [`backtrace`](@code-self-ref) returns a vector of `Union{Ptr{Nothing}, Base.InterpreterIP}`, which may then be passed into
+[`stacktrace`](@code-self-ref) for translation:
 
 ```julia-repl
 julia> trace = backtrace()
@@ -266,8 +266,8 @@ julia> stacktrace(trace)
  (::getfield(REPL, Symbol("##28#29")){REPL.REPLBackend})() at event.jl:92
 ```
 
-Notice that the vector returned by [`backtrace`](@ref) had 18 elements, while the vector returned
-by [`stacktrace`](@ref) only has 6. This is because, by default, [`stacktrace`](@ref) removes
+Notice that the vector returned by [`backtrace`](@code-self-ref) had 18 elements, while the vector returned
+by [`stacktrace`](@code-self-ref) only has 6. This is because, by default, [`stacktrace`](@code-self-ref) removes
 any lower-level C functions from the stack. If you want to include stack frames from C calls,
 you can do it like this:
 
@@ -297,8 +297,8 @@ julia> stacktrace(trace, true)
  ip:0xffffffffffffffff
 ```
 
-Individual pointers returned by [`backtrace`](@ref) can be translated into [`StackTraces.StackFrame`](@ref)
-s by passing them into [`StackTraces.lookup`](@ref):
+Individual pointers returned by [`backtrace`](@code-self-ref) can be translated into [`StackTraces.StackFrame`](@code-self-ref)
+s by passing them into [`StackTraces.lookup`](@code-self-ref):
 
 ```julia-repl
 julia> pointer = backtrace()[1];

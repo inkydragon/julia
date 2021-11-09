@@ -142,7 +142,7 @@ and `main()` calls `repl_entrypoint(argc, (char**)argv)`.
 ## `repl_entrypoint()`
 
 [`repl_entrypoint()`](https://github.com/JuliaLang/julia/blob/master/src/jlapi.c) loads the contents of
-`argv[]` into [`Base.ARGS`](@ref).
+`argv[]` into [`Base.ARGS`](@code-self-ref).
 
 If a `.jl` "program" file was supplied on the command line, then [`exec_program()`](https://github.com/JuliaLang/julia/blob/master/src/jlapi.c)
 calls [`jl_load(program,len)`](https://github.com/JuliaLang/julia/blob/master/src/toplevel.c) which
@@ -169,8 +169,8 @@ When given `println("Hello World!")`, it would usually decide to run the code by
 [`jl_interpret_toplevel_thunk`](https://github.com/JuliaLang/julia/blob/master/src/interpreter.c), which then calls
 [`eval_body`](https://github.com/JuliaLang/julia/blob/master/src/interpreter.c).
 
-The stack dump below shows how the interpreter works its way through various methods of [`Base.println()`](@ref)
-and [`Base.print()`](@ref) before arriving at [`write(s::IO, a::Array{T}) where T`](https://github.com/JuliaLang/julia/blob/master/base/stream.jl)
+The stack dump below shows how the interpreter works its way through various methods of [`Base.println()`](@code-self-ref)
+and [`Base.print()`](@code-self-ref) before arriving at [`write(s::IO, a::Array{T}) where T`](https://github.com/JuliaLang/julia/blob/master/base/stream.jl)
  which does `ccall(jl_uv_write())`.
 
 [`jl_uv_write()`](https://github.com/JuliaLang/julia/blob/master/src/jl_uv.c) calls `uv_write()`
@@ -182,7 +182,7 @@ Hello World!
 
 | Stack frame                    | Source code     | Notes                                                |
 |:------------------------------ |:--------------- |:---------------------------------------------------- |
-| `jl_uv_write()`                | `jl_uv.c`       | called though [`ccall`](@ref)                        |
+| `jl_uv_write()`                | `jl_uv.c`       | called though [`ccall`](@code-self-ref)                        |
 | `julia_write_282942`           | `stream.jl`     | function `write!(s::IO, a::Array{T}) where T`        |
 | `julia_print_284639`           | `ascii.jl`      | `print(io::IO, s::String) = (write(io, s); nothing)` |
 | `jlcall_print_284639`          |                 |                                                      |

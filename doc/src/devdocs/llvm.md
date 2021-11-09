@@ -12,14 +12,14 @@ The code for lowering Julia AST to LLVM IR or interpreting it directly is in dir
 | File                | Description                                                |
 |:------------------- |:---------------------------------------------------------- |
 | `builtins.c`        | Builtin functions                                          |
-| `ccall.cpp`         | Lowering [`ccall`](@ref)                                   |
+| `ccall.cpp`         | Lowering [`ccall`](@code-self-ref)                                   |
 | `cgutils.cpp`       | Lowering utilities, notably for array and tuple accesses   |
 | `codegen.cpp`       | Top-level of code generation, pass list, lowering builtins |
 | `debuginfo.cpp`     | Tracks debug information for JIT code                      |
 | `disasm.cpp`        | Handles native object file and JIT code diassembly         |
 | `gf.c`              | Generic functions                                          |
 | `intrinsics.cpp`    | Lowering intrinsics                                        |
-| `llvm-simdloop.cpp` | Custom LLVM pass for [`@simd`](@ref)                       |
+| `llvm-simdloop.cpp` | Custom LLVM pass for [`@simd`](@code-self-ref)                       |
 | `sys.c`             | I/O and operating system utility functions                 |
 
 Some of the `.cpp` files form a group that compile to a single object.
@@ -256,10 +256,10 @@ optimizer from making optimizations that would introduce these operations. Note
 we can still insert static constants at JIT time by using `inttoptr` in address
 space 0 and then decaying to the appropriate address space afterwards.
 
-### Supporting [`ccall`](@ref)
+### Supporting [`ccall`](@code-self-ref)
 
 One important aspect missing from the discussion so far is the handling of
-[`ccall`](@ref). [`ccall`](@ref) has the peculiar feature that the location and
+[`ccall`](@code-self-ref). [`ccall`](@code-self-ref) has the peculiar feature that the location and
 scope of a use do not coincide. As an example consider:
 ```julia
 A = randn(1024)
@@ -268,14 +268,14 @@ ccall(:foo, Cvoid, (Ptr{Float64},), A)
 In lowering, the compiler will insert a conversion from the array to the
 pointer which drops the reference to the array value. However, we of course
 need to make sure that the array does stay alive while we're doing the
-[`ccall`](@ref). To understand how this is done, first recall the lowering of the
+[`ccall`](@code-self-ref). To understand how this is done, first recall the lowering of the
 above code:
 ```julia
 return $(Expr(:foreigncall, :(:foo), Cvoid, svec(Ptr{Float64}), 0, :(:ccall), Expr(:foreigncall, :(:jl_array_ptr), Ptr{Float64}, svec(Any), 0, :(:ccall), :(A)), :(A)))
 ```
 The last `:(A)`, is an extra argument list inserted during lowering that informs
 the code generator which Julia level values need to be kept alive for the
-duration of this [`ccall`](@ref). We then take this information and represent
+duration of this [`ccall`](@code-self-ref). We then take this information and represent
 it in an "operand bundle" at the IR level. An operand bundle is essentially a fake
 use that is attached to the call site. At the IR level, this looks like so:
 ```llvm
@@ -285,9 +285,9 @@ The GC root placement pass will treat the `jl_roots` operand bundle as if it wer
 a regular operand. However, as a final step, after the GC roots are inserted,
 it will drop the operand bundle to avoid confusing instruction selection.
 
-### Supporting [`pointer_from_objref`](@ref)
+### Supporting [`pointer_from_objref`](@code-self-ref)
 
-[`pointer_from_objref`](@ref) is special because it requires the user to take
+[`pointer_from_objref`](@code-self-ref) is special because it requires the user to take
 explicit control of GC rooting. By our above invariants, this function is illegal,
 because it performs an address space cast from 10 to 0. However, it can be useful,
 in certain situations, so we provide a special intrinsic:

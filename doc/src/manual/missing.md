@@ -3,8 +3,8 @@
 Julia provides support for representing missing values in the statistical sense.
 This is for situations where no value is available for a variable in an observation,
 but a valid value theoretically exists.
-Missing values are represented via the [`missing`](@ref) object, which is the
-singleton instance of the type [`Missing`](@ref). `missing` is equivalent to
+Missing values are represented via the [`missing`](@code-self-ref) object, which is the
+singleton instance of the type [`Missing`](@code-self-ref). `missing` is equivalent to
 [`NULL` in SQL](https://en.wikipedia.org/wiki/NULL_(SQL)) and
 [`NA` in R](https://cran.r-project.org/doc/manuals/r-release/R-lang.html#NA-handling),
 and behaves like them in most situations.
@@ -37,7 +37,7 @@ Packages should consider
 whether it makes sense to propagate missing values when defining new functions,
 and define methods appropriately if this is the case. Passing a `missing` value
 to a function which does not have a method accepting arguments of type `Missing`
-throws a [`MethodError`](@ref), just like for any other type.
+throws a [`MethodError`](@code-self-ref), just like for any other type.
 
 Functions that do not propagate `missing` values can be made to do so by wrapping
 them in the `passmissing` function provided by the
@@ -66,9 +66,9 @@ missing
 
 In particular, note that `missing == missing` returns `missing`, so `==` cannot
 be used to test whether a value is missing. To test whether `x` is `missing`,
-use [`ismissing(x)`](@ref).
+use [`ismissing(x)`](@code-self-ref).
 
-Special comparison operators [`isequal`](@ref) and [`===`](@ref) are exceptions
+Special comparison operators [`isequal`](@code-self-ref) and [`===`](@code-self-ref) are exceptions
 to the propagation rule. They will always return a `Bool` value, even in the presence
 of `missing` values, considering `missing` as equal to `missing` and as different
 from any other value. They can therefore be used to test whether a value is `missing`:
@@ -87,8 +87,8 @@ julia> isequal(missing, missing)
 true
 ```
 
-The [`isless`](@ref) operator is another exception: `missing` is considered
-as greater than any other value. This operator is used by [`sort`](@ref),
+The [`isless`](@code-self-ref) operator is another exception: `missing` is considered
+as greater than any other value. This operator is used by [`sort`](@code-self-ref),
 which therefore places `missing` values after all other values:
 
 ```jldoctest
@@ -104,7 +104,7 @@ false
 
 ## Logical operators
 
-Logical (or boolean) operators [`|`](@ref), [`&`](@ref) and [`xor`](@ref) are
+Logical (or boolean) operators [`|`](@code-self-ref), [`&`](@code-self-ref) and [`xor`](@code-self-ref) are
 another special case since they only propagate `missing` values when it is logically
 required. For these operators, whether or not the result is uncertain, depends
 on the particular operation. This follows the well-established rules of
@@ -113,7 +113,7 @@ implemented by e.g. `NULL` in SQL and `NA` in R. This abstract definition
 corresponds to a relatively natural behavior which is best explained
 via concrete examples.
 
-Let us illustrate this principle with the logical "or" operator [`|`](@ref).
+Let us illustrate this principle with the logical "or" operator [`|`](@code-self-ref).
 Following the rules of boolean logic, if one of the operands is `true`,
 the value of the other operand does not have an influence on the result,
 which will always be `true`:
@@ -165,7 +165,7 @@ julia> missing | false
 missing
 ```
 
-The behavior of the logical "and" operator [`&`](@ref) is similar to that of the
+The behavior of the logical "and" operator [`&`](@code-self-ref) is similar to that of the
 `|` operator, with the difference that missingness does not propagate when
 one of the operands is `false`. For example, when that is the case of the first
 operand:
@@ -195,19 +195,19 @@ julia> true & missing
 missing
 ```
 
-Finally, the "exclusive or" logical operator [`xor`](@ref) always propagates
+Finally, the "exclusive or" logical operator [`xor`](@code-self-ref) always propagates
 `missing` values, since both operands always have an effect on the result.
-Also note that the negation operator [`!`](@ref) returns `missing` when the
+Also note that the negation operator [`!`](@code-self-ref) returns `missing` when the
 operand is `missing`, just like other unary operators.
 
 ## Control Flow and Short-Circuiting Operators
 
-Control flow operators including [`if`](@ref), [`while`](@ref) and the
+Control flow operators including [`if`](@code-self-ref), [`while`](@code-self-ref) and the
 [ternary operator](@ref man-conditional-evaluation) `x ? y : z`
 do not allow for missing values. This is because of the uncertainty about whether
 the actual value would be `true` or `false` if we could observe it.
 This implies we do not know how the program should behave. In this case, a
-[`TypeError`](@ref) is thrown as soon as a `missing` value is encountered in this context:
+[`TypeError`](@code-self-ref) is thrown as soon as a `missing` value is encountered in this context:
 
 ```jldoctest
 julia> if missing
@@ -217,7 +217,7 @@ ERROR: TypeError: non-boolean (Missing) used in boolean context
 ```
 
 For the same reason, contrary to logical operators presented above,
-the short-circuiting boolean operators [`&&`](@ref) and [`||`](@ref) do not
+the short-circuiting boolean operators [`&&`](@code-self-ref) and [`||`](@code-self-ref) do not
 allow for `missing` values in situations where the value of the operand
 determines whether the next operand is evaluated or not. For example:
 
@@ -282,7 +282,7 @@ julia> Array{Union{Missing, String}}(missing, 2, 3)
 An array with element type allowing `missing` entries (e.g. `Vector{Union{Missing, T}}`)
 which does not contain any `missing` entries can be converted to an array type that does
 not allow for `missing` entries (e.g. `Vector{T}`) using
-[`convert`](@ref). If the array contains `missing` values, a `MethodError` is thrown
+[`convert`](@code-self-ref). If the array contains `missing` values, a `MethodError` is thrown
 during conversion:
 
 ```jldoctest
@@ -315,7 +315,7 @@ julia> sum([1, missing])
 missing
 ```
 
-In this situation, use the [`skipmissing`](@ref) function to skip missing values:
+In this situation, use the [`skipmissing`](@code-self-ref) function to skip missing values:
 
 ```jldoctest
 julia> sum(skipmissing([1, missing]))
@@ -370,7 +370,7 @@ julia> argmax(x)
 1
 ```
 
-Use [`collect`](@ref) to extract non-`missing` values and store them in an array:
+Use [`collect`](@code-self-ref) to extract non-`missing` values and store them in an array:
 
 ```jldoctest skipmissing
 julia> collect(x)
@@ -384,7 +384,7 @@ julia> collect(x)
 
 The three-valued logic described above for logical operators is also used
 by logical functions applied to arrays. Thus, array equality tests using
-the [`==`](@ref) operator return `missing` whenever the result cannot be
+the [`==`](@code-self-ref) operator return `missing` whenever the result cannot be
 determined without knowing the actual value of the `missing` entry. In practice,
 this means `missing` is returned if all non-missing values of the compared
 arrays are equal, but one or both arrays contain missing values (possibly at
@@ -401,7 +401,7 @@ julia> [1, 2, missing] == [1, missing, 2]
 missing
 ```
 
-As for single values, use [`isequal`](@ref) to treat `missing` values as equal
+As for single values, use [`isequal`](@code-self-ref) to treat `missing` values as equal
 to other `missing` values, but different from non-missing values:
 
 ```jldoctest
@@ -412,7 +412,7 @@ julia> isequal([1, 2, missing], [1, missing, 2])
 false
 ```
 
-Functions [`any`](@ref) and [`all`](@ref) also follow the rules of
+Functions [`any`](@code-self-ref) and [`all`](@code-self-ref) also follow the rules of
 three-valued logic. Thus, returning `missing` when the result cannot be determined:
 
 ```jldoctest

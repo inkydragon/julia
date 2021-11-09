@@ -62,7 +62,7 @@ the ranges may not start at 1.  If you just want the range for a particular dime
 is `axes(A, d)`.
 
 Base implements a custom range type, `OneTo`, where `OneTo(n)` means the same thing as `1:n` but
-in a form that guarantees (via the type system) that the lower index is 1. For any new [`AbstractArray`](@ref)
+in a form that guarantees (via the type system) that the lower index is 1. For any new [`AbstractArray`](@code-self-ref)
 type, this is the default returned by `axes`, and it indicates that this array type uses "conventional"
 1-based indexing.
 
@@ -72,7 +72,7 @@ can sometimes simplify such tests.
 ### Linear indexing (`LinearIndices`)
 
 
-Some algorithms are most conveniently (or efficiently) written in terms of a single linear index, `A[i]` even if `A` is multi-dimensional. Regardless of the array's native indices, linear indices always range from `1:length(A)`. However, this raises an ambiguity for one-dimensional arrays (a.k.a., [`AbstractVector`](@ref)): does `v[i]` mean linear indexing , or Cartesian indexing with the array's native indices?
+Some algorithms are most conveniently (or efficiently) written in terms of a single linear index, `A[i]` even if `A` is multi-dimensional. Regardless of the array's native indices, linear indices always range from `1:length(A)`. However, this raises an ambiguity for one-dimensional arrays (a.k.a., [`AbstractVector`](@code-self-ref)): does `v[i]` mean linear indexing , or Cartesian indexing with the array's native indices?
 
 For this reason, your best option may be to iterate over the array with `eachindex(A)`, or, if you require the indices to be sequential integers, to get the index range by calling `LinearIndices(A)`. This will return `axes(A, 1)` if A is an AbstractVector, and the equivalent of `1:length(A)` otherwise.
 
@@ -96,7 +96,7 @@ Storage is often allocated with `Array{Int}(undef, dims)` or `similar(A, args...
 to match the indices of some other array, this may not always suffice. The generic replacement
 for such patterns is to use `similar(storagetype, shape)`.  `storagetype` indicates the kind of
 underlying "conventional" behavior you'd like, e.g., `Array{Int}` or `BitArray` or even `dims->zeros(Float32, dims)`
-(which would allocate an all-zeros array). `shape` is a tuple of [`Integer`](@ref) or
+(which would allocate an all-zeros array). `shape` is a tuple of [`Integer`](@code-self-ref) or
 `AbstractUnitRange` values, specifying the indices that you want the result to use. Note that
 a convenient way of producing an all-zeros array that matches the indices of A is simply `zeros(A)`.
 

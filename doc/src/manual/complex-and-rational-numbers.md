@@ -7,7 +7,7 @@ behave as expected.
 
 ## Complex Numbers
 
-The global constant [`im`](@ref) is bound to the complex number *i*, representing the principal
+The global constant [`im`](@code-self-ref) is bound to the complex number *i*, representing the principal
 square root of -1. (Using mathematicians' `i` or engineers' `j` for this global constant was rejected since they are such popular index variable names.) Since Julia allows numeric literals to be [juxtaposed with identifiers as coefficients](@ref man-numeric-literal-coefficients),
 this binding suffices to provide convenient syntax for complex numbers, similar to the traditional
 mathematical notation:
@@ -110,9 +110,9 @@ julia> angle(1 + 2im) # phase angle in radians
 1.1071487177940904
 ```
 
-As usual, the absolute value ([`abs`](@ref)) of a complex number is its distance from zero.
-[`abs2`](@ref) gives the square of the absolute value, and is of particular use for complex
-numbers since it avoids taking a square root. [`angle`](@ref) returns the phase angle in radians
+As usual, the absolute value ([`abs`](@code-self-ref)) of a complex number is its distance from zero.
+[`abs2`](@code-self-ref) gives the square of the absolute value, and is of particular use for complex
+numbers since it avoids taking a square root. [`angle`](@code-self-ref) returns the phase angle in radians
 (also known as the *argument* or *arg* function). The full gamut of other [Elementary Functions](@ref)
 is also defined for complex numbers:
 
@@ -134,7 +134,7 @@ julia> sinh(1 + 2im)
 ```
 
 Note that mathematical functions typically return real values when applied to real numbers and
-complex values when applied to complex numbers. For example, [`sqrt`](@ref) behaves differently
+complex values when applied to complex numbers. For example, [`sqrt`](@code-self-ref) behaves differently
 when applied to `-1` versus `-1 + 0im` even though `-1 == -1 + 0im`:
 
 ```jldoctest
@@ -156,7 +156,7 @@ julia> a = 1; b = 2; a + b*im
 1 + 2im
 ```
 
-However, this is *not* recommended. Instead, use the more efficient [`complex`](@ref) function to construct
+However, this is *not* recommended. Instead, use the more efficient [`complex`](@code-self-ref) function to construct
 a complex value directly from its real and imaginary parts:
 
 ```jldoctest
@@ -166,7 +166,7 @@ julia> a = 1; b = 2; complex(a, b)
 
 This construction avoids the multiplication and addition operations.
 
-[`Inf`](@ref) and [`NaN`](@ref) propagate through complex numbers in the real and imaginary parts
+[`Inf`](@code-self-ref) and [`NaN`](@code-self-ref) propagate through complex numbers in the real and imaginary parts
 of a complex number as described in the [Special floating-point values](@ref) section:
 
 ```jldoctest
@@ -180,7 +180,7 @@ julia> 1 + NaN*im
 ## Rational Numbers
 
 Julia has a rational number type to represent exact ratios of integers. Rationals are constructed
-using the [`//`](@ref) operator:
+using the [`//`](@code-self-ref) operator:
 
 ```jldoctest
 julia> 2//3
@@ -206,7 +206,7 @@ julia> -4//-12
 
 This normalized form for a ratio of integers is unique, so equality of rational values can be
 tested by checking for equality of the numerator and denominator. The standardized numerator and
-denominator of a rational value can be extracted using the [`numerator`](@ref) and [`denominator`](@ref)
+denominator of a rational value can be extracted using the [`numerator`](@code-self-ref) and [`denominator`](@code-self-ref)
 functions:
 
 ```jldoctest
@@ -276,7 +276,7 @@ julia> typeof(x)
 Rational{Int64}
 ```
 
-Trying to construct a [`NaN`](@ref) rational value, however, is invalid:
+Trying to construct a [`NaN`](@code-self-ref) rational value, however, is invalid:
 
 ```jldoctest
 julia> 0//0

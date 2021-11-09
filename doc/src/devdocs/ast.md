@@ -1,7 +1,7 @@
 # Julia ASTs
 
 Julia has two representations of code. First there is a surface syntax AST returned by the parser
-(e.g. the [`Meta.parse`](@ref) function), and manipulated by macros. It is a structured representation
+(e.g. the [`Meta.parse`](@code-self-ref) function), and manipulated by macros. It is a structured representation
 of code as it is written, constructed by `julia-parser.scm` from a character stream. Next there
 is a lowered form, or IR (intermediate representation), which is used by type inference and code
 generation. In the lowered form there are fewer types of nodes, all macros are expanded, and all
@@ -12,7 +12,7 @@ First we will focus on the AST, since it is needed to write macros.
 
 ## Surface syntax AST
 
-Front end ASTs consist almost entirely of [`Expr`](@ref)s and atoms (e.g. symbols, numbers).
+Front end ASTs consist almost entirely of [`Expr`](@code-self-ref)s and atoms (e.g. symbols, numbers).
 There is generally a different expression head for each visually distinct syntactic form.
 Examples will be given in s-expression syntax.
 Each parenthesized list corresponds to an Expr, where the first element is the head.
@@ -307,7 +307,7 @@ types exist in lowered form:
 
 ### `Expr` types
 
-These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
+These symbols appear in the `head` field of [`Expr`](@code-self-ref)s in lowered form.
 
   * `call`
 
@@ -420,7 +420,7 @@ These symbols appear in the `head` field of [`Expr`](@ref)s in lowered form.
 
   * `new`
 
-    Allocates a new struct-like object. First argument is the type. The [`new`](@ref) pseudo-function is lowered
+    Allocates a new struct-like object. First argument is the type. The [`new`](@code-self-ref) pseudo-function is lowered
     to this, and the type is always inserted by the compiler.  This is very much an internal-only
     feature, and does no checking. Evaluating arbitrary `new` expressions can easily segfault.
 

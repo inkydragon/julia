@@ -136,10 +136,10 @@ Base.Sort.partialsortperm!
 
 There are currently four sorting algorithms available in base Julia:
 
-  * [`InsertionSort`](@ref)
-  * [`QuickSort`](@ref)
-  * [`PartialQuickSort(k)`](@ref)
-  * [`MergeSort`](@ref)
+  * [`InsertionSort`](@code-self-ref)
+  * [`QuickSort`](@code-self-ref)
+  * [`PartialQuickSort(k)`](@code-self-ref)
+  * [`MergeSort`](@code-self-ref)
 
 `InsertionSort` is an O(n^2) stable sorting algorithm. It is efficient for very small `n`, and
 is used internally by `QuickSort`.
@@ -191,19 +191,19 @@ may make sense.
 
 ## Alternate orderings
 
-By default, `sort` and related functions use [`isless`](@ref) to compare two
+By default, `sort` and related functions use [`isless`](@code-self-ref) to compare two
 elements in order to determine which should come first. The
-[`Base.Order.Ordering`](@ref) abstract type provides a mechanism for defining
+[`Base.Order.Ordering`](@code-self-ref) abstract type provides a mechanism for defining
 alternate orderings on the same set of elements. Instances of `Ordering` define
 a [total order](https://en.wikipedia.org/wiki/Total_order) on a set of elements,
 so that for any elements `a`, `b`, `c` the following hold:
 
 * Exactly one of the following is true: `a` is less than `b`, `b` is less than
-  `a`, or `a` and `b` are equal (according to [`isequal`](@ref)).
+  `a`, or `a` and `b` are equal (according to [`isequal`](@code-self-ref)).
 * The relation is transitive - if `a` is less than `b` and `b` is less than `c`
   then `a` is less than `c`.
 
-The [`Base.Order.lt`](@ref) function works as a generalization of `isless` to
+The [`Base.Order.lt`](@code-self-ref) function works as a generalization of `isless` to
 test whether `a` is less than `b` according to a given order.
 
 ```@docs

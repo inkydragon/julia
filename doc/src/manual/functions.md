@@ -170,7 +170,7 @@ infer the return type.  For more information, see the [Performance Tips](@ref ma
 ### Returning nothing
 
 For functions that do not need to return a value (functions used only for some side effects),
-the Julia convention is to return the value [`nothing`](@ref):
+the Julia convention is to return the value [`nothing`](@code-self-ref):
 
 ```julia
 function printx(x)
@@ -209,7 +209,7 @@ julia> +(1,2,3)
 
 The infix form is exactly equivalent to the function application form -- in fact the former is
 parsed to produce the function call internally. This also means that you can assign and pass around
-operators such as [`+`](@ref) and [`*`](@ref) just like you would with other function values:
+operators such as [`+`](@code-self-ref) and [`*`](@code-self-ref) just like you would with other function values:
 
 ```jldoctest
 julia> f = +;
@@ -226,12 +226,12 @@ A few special expressions correspond to calls to functions with non-obvious name
 
 | Expression        | Calls                   |
 |:----------------- |:----------------------- |
-| `[A B C ...]`     | [`hcat`](@ref)          |
-| `[A; B; C; ...]`  | [`vcat`](@ref)          |
-| `[A B; C D; ...]` | [`hvcat`](@ref)         |
-| `A'`              | [`adjoint`](@ref)       |
-| `A[i]`            | [`getindex`](@ref)      |
-| `A[i] = x`        | [`setindex!`](@ref)     |
+| `[A B C ...]`     | [`hcat`](@code-self-ref)          |
+| `[A; B; C; ...]`  | [`vcat`](@code-self-ref)          |
+| `[A B; C D; ...]` | [`hvcat`](@code-self-ref)         |
+| `A'`              | [`adjoint`](@code-self-ref)       |
+| `A[i]`            | [`getindex`](@code-self-ref)      |
+| `A[i] = x`        | [`setindex!`](@code-self-ref)     |
 | `A.n`             | [`getproperty`](@ref Base.getproperty) |
 | `A.n = x`         | [`setproperty!`](@ref Base.setproperty!) |
 
@@ -258,7 +258,7 @@ This creates a function taking one argument `x` and returning the value of the p
 name based on consecutive numbering.
 
 The primary use for anonymous functions is passing them to functions which take other functions
-as arguments. A classic example is [`map`](@ref), which applies a function to each value of
+as arguments. A classic example is [`map`](@code-self-ref), which applies a function to each value of
 an array and returns a new array containing the resulting values:
 
 ```jldoctest
@@ -270,7 +270,7 @@ julia> map(round, [1.2, 3.5, 1.7])
 ```
 
 This is fine if a named function effecting the transform already exists to pass as the first argument
-to [`map`](@ref). Often, however, a ready-to-use, named function does not exist. In these
+to [`map`](@code-self-ref). Often, however, a ready-to-use, named function does not exist. In these
 situations, the anonymous function construct allows easy creation of a single-use function object
 without needing a name:
 
@@ -287,7 +287,7 @@ A zero-argument anonymous function is written as `()->3`. The idea of a function
 may seem strange, but is useful for "delaying" a computation. In this usage, a block of code is
 wrapped in a zero-argument function, which is later invoked by calling it as `f`.
 
-As an example, consider this call to [`get`](@ref):
+As an example, consider this call to [`get`](@code-self-ref):
 
 ```julia
 get(dict, key) do
@@ -303,7 +303,7 @@ enclosed between `do` and `end`, like so:
 get(()->time(), dict, key)
 ```
 
-The call to [`time`](@ref) is delayed by wrapping it in a 0-argument anonymous function
+The call to [`time`](@code-self-ref) is delayed by wrapping it in a 0-argument anonymous function
 that is called only when the requested key is absent from `dict`.
 
 ## Tuples
@@ -425,7 +425,7 @@ julia> d
 4
 ```
 
-Other valid left-hand side expressions can be used as elements of the assignment list, which will call [`setindex!`](@ref) or [`setproperty!`](@ref), or recursively destructure individual elements of the iterator:
+Other valid left-hand side expressions can be used as elements of the assignment list, which will call [`setindex!`](@code-self-ref) or [`setproperty!`](@code-self-ref), or recursively destructure individual elements of the iterator:
 
 ```jldoctest
 julia> X = zeros(3);
@@ -473,7 +473,7 @@ julia> b
 Base.Iterators.Rest{Base.Generator{UnitRange{Int64}, typeof(abs2)}, Int64}(Base.Generator{UnitRange{Int64}, typeof(abs2)}(abs2, 1:4), 1)
 ```
 
-See [`Base.rest`](@ref) for details on the precise handling and customization for specific iterators.
+See [`Base.rest`](@code-self-ref) for details on the precise handling and customization for specific iterators.
 
 ## Property destructuring
 
@@ -655,7 +655,7 @@ call will fail, just as it would if too many arguments were given explicitly.
 
 It is often possible to provide sensible default values for function arguments.
 This can save users from having to pass every argument on every call.
-For example, the function [`Date(y, [m, d])`](@ref)
+For example, the function [`Date(y, [m, d])`](@code-self-ref)
 from `Dates` module constructs a `Date` type for a given year `y`, month `m` and day `d`.
 However, `m` and `d` arguments are optional and their default value is `1`.
 This behavior can be expressed concisely as:
@@ -749,7 +749,7 @@ Named tuples (as well as dictionaries with keys of `Symbol`) can be passed as
 keyword arguments using a semicolon in a call, e.g. `f(x, z=1; kwargs...)`.
 
 If a keyword argument is not assigned a default value in the method definition,
-then it is *required*: an [`UndefKeywordError`](@ref) exception will be thrown
+then it is *required*: an [`UndefKeywordError`](@code-self-ref) exception will be thrown
 if the caller does not assign it a value:
 ```julia
 function f(x; y)
@@ -792,7 +792,7 @@ the `b` in `a=b` refers to a `b` in an outer scope, not the subsequent argument 
 
 Passing functions as arguments to other functions is a powerful technique, but the syntax for
 it is not always convenient. Such calls are especially awkward to write when the function argument
-requires multiple lines. As an example, consider calling [`map`](@ref) on a function with several
+requires multiple lines. As an example, consider calling [`map`](@code-self-ref) on a function with several
 cases:
 
 ```julia
@@ -823,16 +823,16 @@ end
 ```
 
 The `do x` syntax creates an anonymous function with argument `x` and passes it as the first argument
-to [`map`](@ref). Similarly, `do a,b` would create a two-argument anonymous function. Note that `do (a,b)` would create a one-argument anonymous function,
+to [`map`](@code-self-ref). Similarly, `do a,b` would create a two-argument anonymous function. Note that `do (a,b)` would create a one-argument anonymous function,
 whose argument is a tuple to be deconstructed. A plain `do` would declare that what follows is an anonymous function of the form `() -> ...`.
 
-How these arguments are initialized depends on the "outer" function; here, [`map`](@ref) will
+How these arguments are initialized depends on the "outer" function; here, [`map`](@code-self-ref) will
 sequentially set `x` to `A`, `B`, `C`, calling the anonymous function on each, just as would happen
 in the syntax `map(func, [A, B, C])`.
 
 This syntax makes it easier to use functions to effectively extend the language, since calls look
-like normal code blocks. There are many possible uses quite different from [`map`](@ref), such
-as managing system state. For example, there is a version of [`open`](@ref) that runs code ensuring
+like normal code blocks. There are many possible uses quite different from [`map`](@code-self-ref), such
+as managing system state. For example, there is a version of [`open`](@code-self-ref) that runs code ensuring
 that the opened file is eventually closed:
 
 ```julia
@@ -854,8 +854,8 @@ function open(f::Function, args...)
 end
 ```
 
-Here, [`open`](@ref) first opens the file for writing and then passes the resulting output stream
-to the anonymous function you defined in the `do ... end` block. After your function exits, [`open`](@ref)
+Here, [`open`](@code-self-ref) first opens the file for writing and then passes the resulting output stream
+to the anonymous function you defined in the `do ... end` block. After your function exits, [`open`](@code-self-ref)
 will make sure that the stream is properly closed, regardless of whether your function exited
 normally or threw an exception. (The `try/finally` construct will be described in [Control Flow](@ref).)
 
@@ -1023,7 +1023,7 @@ they are equivalent to `broadcast` calls and are fused with other nested "dot" c
  `X .+= Y` etcetera is equivalent to `X .= X .+ Y` and results in a fused in-place assignment;
  see also [dot operators](@ref man-dot-operators).
 
-You can also combine dot operations with function chaining using [`|>`](@ref), as in this example:
+You can also combine dot operations with function chaining using [`|>`](@code-self-ref), as in this example:
 ```jldoctest
 julia> [1:5;] .|> [x->x^2, inv, x->2*x, -, isodd]
 5-element Vector{Real}:

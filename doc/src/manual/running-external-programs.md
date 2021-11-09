@@ -10,11 +10,11 @@ julia> `echo hello`
 
 differs in several aspects from the behavior in various shells, Perl, or Ruby:
 
-  * Instead of immediately running the command, backticks create a [`Cmd`](@ref) object to represent the command.
-    You can use this object to connect the command to others via pipes, [`run`](@ref) it, and [`read`](@ref) or [`write`](@ref)
+  * Instead of immediately running the command, backticks create a [`Cmd`](@code-self-ref) object to represent the command.
+    You can use this object to connect the command to others via pipes, [`run`](@code-self-ref) it, and [`read`](@code-self-ref) or [`write`](@code-self-ref)
     to it.
   * When the command is run, Julia does not capture its output unless you specifically arrange for
-    it to. Instead, the output of the command by default goes to [`stdout`](@ref) as it would using
+    it to. Instead, the output of the command by default goes to [`stdout`](@code-self-ref) as it would using
     `libc`'s `system` call.
   * The command is never run with a shell. Instead, Julia parses the command syntax directly, appropriately
     interpolating variables and splitting on words as the shell would, respecting shell quoting syntax.
@@ -40,10 +40,10 @@ julia> run(mycommand);
 hello
 ```
 
-The `hello` is the output of the `echo` command, sent to [`stdout`](@ref). If the external command fails to run
-successfully, the run method throws an [`ErrorException`](@ref).
+The `hello` is the output of the `echo` command, sent to [`stdout`](@code-self-ref). If the external command fails to run
+successfully, the run method throws an [`ErrorException`](@code-self-ref).
 
-If you want to read the output of the external command, [`read`](@ref) or [`readchomp`](@ref)
+If you want to read the output of the external command, [`read`](@code-self-ref) or [`readchomp`](@code-self-ref)
 can be used instead:
 
 ```jldoctest
@@ -54,7 +54,7 @@ julia> readchomp(`echo hello`)
 "hello"
 ```
 
-More generally, you can use [`open`](@ref) to read from or write to an external command.
+More generally, you can use [`open`](@code-self-ref) to read from or write to an external command.
 
 ```jldoctest
 julia> open(`less`, "w", stdout) do io
@@ -252,7 +252,7 @@ hello | sort
 
 This expression invokes the `echo` command with three words as arguments: `hello`, `|`, and `sort`.
 The result is that a single line is printed: `hello | sort`. How, then, does one construct a
-pipeline? Instead of using `'|'` inside of backticks, one uses [`pipeline`](@ref):
+pipeline? Instead of using `'|'` inside of backticks, one uses [`pipeline`](@code-self-ref):
 
 ```jldoctest
 julia> run(pipeline(`echo hello`, `sort`));
@@ -287,7 +287,7 @@ hello
 ```
 
 The order of the output here is non-deterministic because the two `echo` processes are started
-nearly simultaneously, and race to make the first write to the [`stdout`](@ref) descriptor they
+nearly simultaneously, and race to make the first write to the [`stdout`](@code-self-ref) descriptor they
 share with each other and the `julia` parent process. Julia lets you pipe the output from both
 of these processes to another program:
 
@@ -317,7 +317,7 @@ For example, when reading all of the output from a command, call `read(out, Stri
 since the former will actively consume all of the data written by the process, whereas the latter
 will attempt to store the data in the kernel's buffers while waiting for a reader to be connected.
 
-Another common solution is to separate the reader and writer of the pipeline into separate [`Task`](@ref)s:
+Another common solution is to separate the reader and writer of the pipeline into separate [`Task`](@code-self-ref)s:
 
 ```julia
 writer = @async write(process, "data")
@@ -352,7 +352,7 @@ generates lines with the numbers 0 through 5 on them, while two parallel process
 output, one prefixing lines with the letter "A", the other with the letter "B". Which consumer
 gets the first line is non-deterministic, but once that race has been won, the lines are consumed
 alternately by one process and then the other. (Setting `$|=1` in Perl causes each print statement
-to flush the [`stdout`](@ref) handle, which is necessary for this example to work. Otherwise all
+to flush the [`stdout`](@code-self-ref) handle, which is necessary for this example to work. Otherwise all
 the output is buffered and printed to the pipe at once, to be read by just one consumer process.)
 
 Here is an even more complex multi-stage producer-consumer example:
@@ -376,7 +376,7 @@ saturated throughput.
 We strongly encourage you to try all these examples to see how they work.
 
 ## `Cmd` Objects
-The backtick syntax create an object of type [`Cmd`](@ref). Such object may also be constructed directly from
+The backtick syntax create an object of type [`Cmd`](@code-self-ref). Such object may also be constructed directly from
 an existing `Cmd` or list of arguments:
 
 ```julia
@@ -399,7 +399,7 @@ julia> run(Cmd(`sh -c "echo foo \$HOWLONG"`, env=("HOWLONG" => "ever!",)));
 foo ever!
 ```
 
-See [`Cmd`](@ref) for additional keyword arguments. The [`setenv`](@ref) and [`addenv`](@ref) commands
+See [`Cmd`](@code-self-ref) for additional keyword arguments. The [`setenv`](@code-self-ref) and [`addenv`](@code-self-ref) commands
 provide another means for replacing or adding to the `Cmd` execution environment variables, respectively:
 
 ```jldoctest

@@ -21,7 +21,7 @@ These `printf` functions are used by the `.c` files in the `src/` and `cli/` dir
 needed to ensure that output buffering is handled in a unified way.
 
 In special cases, like signal handlers, where the full libuv infrastructure is too heavy, `jl_safe_printf()`
-can be used to [`write(2)`](@ref) directly to `STDERR_FILENO`:
+can be used to [`write(2)`](@code-self-ref) directly to `STDERR_FILENO`:
 
 ```c
 void jl_safe_printf(const char *str, ...);
@@ -29,13 +29,13 @@ void jl_safe_printf(const char *str, ...);
 
 ## Interface between JL_STD* and Julia code
 
-[`Base.stdin`](@ref), [`Base.stdout`](@ref) and [`Base.stderr`](@ref) are bound to the `JL_STD*` libuv
+[`Base.stdin`](@code-self-ref), [`Base.stdout`](@code-self-ref) and [`Base.stderr`](@code-self-ref) are bound to the `JL_STD*` libuv
 streams defined in the runtime.
 
 Julia's `__init__()` function (in `base/sysimg.jl`) calls `reinit_stdio()` (in `base/stream.jl`)
-to create Julia objects for [`Base.stdin`](@ref), [`Base.stdout`](@ref) and [`Base.stderr`](@ref).
+to create Julia objects for [`Base.stdin`](@code-self-ref), [`Base.stdout`](@code-self-ref) and [`Base.stderr`](@code-self-ref).
 
-`reinit_stdio()` uses [`ccall`](@ref) to retrieve pointers to `JL_STD*` and calls `jl_uv_handle_type()`
+`reinit_stdio()` uses [`ccall`](@code-self-ref) to retrieve pointers to `JL_STD*` and calls `jl_uv_handle_type()`
 to inspect the type of each stream.  It then creates a Julia `Base.IOStream`, `Base.TTY` or `Base.PipeEndpoint`
 object to represent each stream, e.g.:
 
@@ -50,7 +50,7 @@ $ echo hello | julia -e 'println(typeof((stdin, stdout, stderr)))' | cat
 Tuple{Base.PipeEndpoint,Base.PipeEndpoint,Base.TTY}
 ```
 
-The [`Base.read`](@ref) and [`Base.write`](@ref) methods for these streams use [`ccall`](@ref)
+The [`Base.read`](@code-self-ref) and [`Base.write`](@code-self-ref) methods for these streams use [`ccall`](@code-self-ref)
 to call libuv wrappers in `src/jl_uv.c`, e.g.:
 
 ```

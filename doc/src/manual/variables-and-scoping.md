@@ -22,11 +22,11 @@ The constructs introducing scope blocks are:
 
 | Construct | Scope type | Allowed within |
 |:----------|:-----------|:---------------|
-| [`module`](@ref), [`baremodule`](@ref) | global | global |
-| [`struct`](@ref) | local (soft) | global |
-| [`for`](@ref), [`while`](@ref), [`try`](@ref try) | local (soft) | global, local |
-| [`macro`](@ref) | local (hard) | global |
-| functions, [`do`](@ref) blocks, [`let`](@ref) blocks, comprehensions, generators | local (hard) | global, local |
+| [`module`](@code-self-ref), [`baremodule`](@code-self-ref) | global | global |
+| [`struct`](@code-self-ref) | local (soft) | global |
+| [`for`](@code-self-ref), [`while`](@code-self-ref), [`try`](@ref try) | local (soft) | global, local |
+| [`macro`](@code-self-ref) | local (hard) | global |
+| functions, [`do`](@code-self-ref) blocks, [`let`](@code-self-ref) blocks, comprehensions, generators | local (hard) | global, local |
 
 Notably missing from this table are
 [begin blocks](@ref man-compound-expressions) and [if blocks](@ref man-conditional-evaluation)
@@ -401,7 +401,7 @@ julia> include_string(Main, code)
 ERROR: LoadError: UndefVarError: s not defined
 ```
 
-Here we use [`include_string`](@ref), to evaluate `code` as though it were the contents of a file.
+Here we use [`include_string`](@code-self-ref), to evaluate `code` as though it were the contents of a file.
 We could also save `code` to a file and then call `include` on that file—the result would be the
 same. As you can see, this behaves quite different from evaluating the same code in the REPL. Let's
 break down what's happening here:
@@ -664,7 +664,7 @@ julia> f()
 ## Constants
 
 A common use of variables is giving names to specific, unchanging values. Such variables are only
-assigned once. This intent can be conveyed to the compiler using the [`const`](@ref) keyword:
+assigned once. This intent can be conveyed to the compiler using the [`const`](@code-self-ref) keyword:
 
 ```jldoctest
 julia> const e  = 2.71828182845904523536;

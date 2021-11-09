@@ -18,11 +18,11 @@ Base.Sys.MACHINE
 
 See also:
 
-  * [`stdin`](@ref)
-  * [`stdout`](@ref)
-  * [`stderr`](@ref)
-  * [`ENV`](@ref)
-  * [`ENDIAN_BOM`](@ref)
+  * [`stdin`](@code-self-ref)
+  * [`stdout`](@code-self-ref)
+  * [`stderr`](@code-self-ref)
+  * [`ENV`](@code-self-ref)
+  * [`ENDIAN_BOM`](@code-self-ref)
   * `Libc.MS_ASYNC`
   * `Libc.MS_INVALIDATE`
   * `Libc.MS_SYNC`

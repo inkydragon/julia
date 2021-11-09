@@ -97,12 +97,12 @@ this fashion is to check if `abspath(PROGRAM_FILE) == @__FILE__` is `true`.
 ### [How do I catch CTRL-C in a script?](@id catch-ctrl-c)
 
 Running a Julia script using `julia file.jl` does not throw
-[`InterruptException`](@ref) when you try to terminate it with CTRL-C
+[`InterruptException`](@code-self-ref) when you try to terminate it with CTRL-C
 (SIGINT).  To run a certain code before terminating a Julia script,
-which may or may not be caused by CTRL-C, use [`atexit`](@ref).
+which may or may not be caused by CTRL-C, use [`atexit`](@code-self-ref).
 Alternatively, you can use `julia -e 'include(popfirst!(ARGS))'
 file.jl` to execute a script while being able to catch
-`InterruptException` in the [`try`](@ref) block.
+`InterruptException` in the [`try`](@code-self-ref) block.
 
 ### How do I pass options to `julia` using `#!/usr/bin/env`?
 
@@ -139,7 +139,7 @@ parsing the file once it reaches to the `exec` statement.
 
     @show ARGS  # put any Julia code here
     ```
-    instead. Note that with this strategy [`PROGRAM_FILE`](@ref) will not be set.
+    instead. Note that with this strategy [`PROGRAM_FILE`](@code-self-ref) will not be set.
 
 ## Functions
 
@@ -359,7 +359,7 @@ julia> function unstable(flag::Bool)
 unstable (generic function with 1 method)
 ```
 
-It returns either an `Int` or a [`Float64`](@ref) depending on the value of its argument.
+It returns either an `Int` or a [`Float64`](@code-self-ref) depending on the value of its argument.
 Since Julia can't predict the return type of this function at compile-time, any computation
 that uses it must be able to cope with values of both types, which makes it hard to produce
 fast machine code.
@@ -377,11 +377,11 @@ Stacktrace:
 ```
 
 This behavior is an inconvenient consequence of the requirement for type-stability.  In the case
-of [`sqrt`](@ref), most users want `sqrt(2.0)` to give a real number, and would be unhappy if
-it produced the complex number `1.4142135623730951 + 0.0im`.  One could write the [`sqrt`](@ref)
+of [`sqrt`](@code-self-ref), most users want `sqrt(2.0)` to give a real number, and would be unhappy if
+it produced the complex number `1.4142135623730951 + 0.0im`.  One could write the [`sqrt`](@code-self-ref)
 function to switch to a complex-valued output only when passed a negative number (which is what
-[`sqrt`](@ref) does in some other languages), but then the result would not be [type-stable](@ref man-type-stability)
-and the [`sqrt`](@ref) function would have poor performance.
+[`sqrt`](@code-self-ref) does in some other languages), but then the result would not be [type-stable](@ref man-type-stability)
+and the [`sqrt`](@code-self-ref) function would have poor performance.
 
 In these and other cases, you can get the result you want by choosing an *input type* that conveys
 your willingness to accept an *output type* in which the result can be represented:
@@ -398,10 +398,10 @@ types or bits values, and the type itself chooses how it makes use of these par
 For example, `Array{Float64, 2}` is parameterized by the type `Float64` to express its
 element type and the integer value `2` to express its number of dimensions.  When
 defining your own parametric type, you can use subtype constraints to declare that a
-certain parameter must be a subtype ([`<:`](@ref)) of some abstract type or a previous
+certain parameter must be a subtype ([`<:`](@code-self-ref)) of some abstract type or a previous
 type parameter.  There is not, however, a dedicated syntax to declare that a parameter
 must be a _value_ of a given type — that is, you cannot directly declare that a
-dimensionality-like parameter [`isa`](@ref) `Int` within the `struct` definition, for
+dimensionality-like parameter [`isa`](@code-self-ref) `Int` within the `struct` definition, for
 example.  Similarly, you cannot do computations (including simple things like addition
 or subtraction) on type parameters.  Instead, these sorts of constraints and
 relationships may be expressed through additional type parameters that are computed
@@ -455,7 +455,7 @@ ideal for a high-level programming language to expose this to the user. For nume
 efficiency and transparency are at a premium, however, the alternatives are worse.
 
 One alternative to consider would be to check each integer operation for overflow and promote
-results to bigger integer types such as [`Int128`](@ref) or [`BigInt`](@ref) in the case of overflow.
+results to bigger integer types such as [`Int128`](@code-self-ref) or [`BigInt`](@code-self-ref) in the case of overflow.
 Unfortunately, this introduces major overhead on every integer operation (think incrementing a
 loop counter) – it requires emitting code to perform run-time overflow checks after arithmetic
 instructions and branches to handle potential overflows. Worse still, this would cause every computation
@@ -465,7 +465,7 @@ being integers, it's impossible to generate fast, simple code the way C and Fort
 do.
 
 A variation on this approach, which avoids the appearance of type instability is to merge the
-`Int` and [`BigInt`](@ref) types into a single hybrid integer type, that internally changes representation
+`Int` and [`BigInt`](@code-self-ref) types into a single hybrid integer type, that internally changes representation
 when a result no longer fits into the size of a machine integer. While this superficially avoids
 type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting
 all of the same difficulties onto the C code implementing this hybrid integer type. This approach
@@ -517,8 +517,8 @@ than -9223372036854775808 is and integers are still represented with a fixed siz
 way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic.
 The first and most obvious issue is that this is not the way machine integer arithmetic works,
 so implementing saturated operations requires emitting instructions after each machine integer
-operation to check for underflow or overflow and replace the result with [`typemin(Int)`](@ref)
-or [`typemax(Int)`](@ref) as appropriate. This alone expands each integer operation from a single,
+operation to check for underflow or overflow and replace the result with [`typemin(Int)`](@code-self-ref)
+or [`typemax(Int)`](@code-self-ref) as appropriate. This alone expands each integer operation from a single,
 fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets
 worse – saturating integer arithmetic isn't associative. Consider this Matlab computation:
 
@@ -802,7 +802,7 @@ all/many future usages of the other functions in module Foo that depend on calli
 Unlike many languages (for example, C and Java), Julia objects cannot be "null" by default.
 When a reference (variable, object field, or array element) is uninitialized, accessing it
 will immediately throw an error. This situation can be detected using the
-[`isdefined`](@ref) or [`isassigned`](@ref Base.isassigned) functions.
+[`isdefined`](@code-self-ref) or [`isassigned`](@ref Base.isassigned) functions.
 
 Some functions are used only for their side effects, and do not need to return a value. In these
 cases, the convention is to return the value `nothing`, which is just a singleton object of type
@@ -816,12 +816,12 @@ as the equivalent of [`Nullable`, `Option` or `Maybe`](https://en.wikipedia.org/
 in other languages. If the value itself can be `nothing` (notably, when `T` is `Any`),
 the `Union{Some{T}, Nothing}` type is more appropriate since `x == nothing` then indicates
 the absence of a value, and `x == Some(nothing)` indicates the presence of a value equal
-to `nothing`. The [`something`](@ref) function allows unwrapping `Some` objects and
+to `nothing`. The [`something`](@code-self-ref) function allows unwrapping `Some` objects and
 using a default value instead of `nothing` arguments. Note that the compiler is able to
 generate efficient code when working with `Union{T, Nothing}` arguments or fields.
 
 To represent missing data in the statistical sense (`NA` in R or `NULL` in SQL), use the
-[`missing`](@ref) object. See the [`Missing Values`](@ref missing) section for more details.
+[`missing`](@code-self-ref) object. See the [`Missing Values`](@ref missing) section for more details.
 
 In some languages, the empty tuple (`()`) is considered the canonical
 form of nothingness. However, in julia it is best thought of as just

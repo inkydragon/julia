@@ -10,7 +10,7 @@ permanent effect. The current value of the same environment variable can be
 determined by evaluating `ENV["JULIA_EDITOR"]`.
 
 The environment variables that Julia uses generally start with `JULIA`. If
-[`InteractiveUtils.versioninfo`](@ref) is called with the keyword `verbose=true`, then the
+[`InteractiveUtils.versioninfo`](@code-self-ref) is called with the keyword `verbose=true`, then the
 output will list any defined environment variables relevant for Julia,
 including those which include `JULIA` in their names.
 
@@ -27,7 +27,7 @@ including those which include `JULIA` in their names.
 ### `JULIA_BINDIR`
 
 The absolute path of the directory containing the Julia executable, which sets
-the global variable [`Sys.BINDIR`](@ref). If `$JULIA_BINDIR` is not set, then
+the global variable [`Sys.BINDIR`](@code-self-ref). If `$JULIA_BINDIR` is not set, then
 Julia determines the value `Sys.BINDIR` at run-time.
 
 The executable itself is one of
@@ -90,7 +90,7 @@ the chapter on [Code Loading](@ref code-loading).
 ### `JULIA_LOAD_PATH`
 
 The `JULIA_LOAD_PATH` environment variable is used to populate the global Julia
-[`LOAD_PATH`](@ref) variable, which determines which packages can be loaded via
+[`LOAD_PATH`](@code-self-ref) variable, which determines which packages can be loaded via
 `import` and `using` (see [Code Loading](@ref code-loading)).
 
 Unlike the shell `PATH` variable, empty entries in `JULIA_LOAD_PATH` are expanded to
@@ -119,7 +119,7 @@ environment variable or if it must have a value, set it to the string `:`.
 ### `JULIA_DEPOT_PATH`
 
 The `JULIA_DEPOT_PATH` environment variable is used to populate the global Julia
-[`DEPOT_PATH`](@ref) variable, which controls where the package manager, as well
+[`DEPOT_PATH`](@code-self-ref) variable, which controls where the package manager, as well
 as Julia's code loading mechanisms, look for package registries, installed
 packages, named environments, repo clones, cached compiled package images,
 configuration files, and the default location of the REPL's history file.
@@ -180,7 +180,7 @@ falls back to `/bin/sh` if `$SHELL` is unset.
 
 ### `JULIA_EDITOR`
 
-The editor returned by `InteractiveUtils.editor()` and used in, e.g., [`InteractiveUtils.edit`](@ref),
+The editor returned by `InteractiveUtils.editor()` and used in, e.g., [`InteractiveUtils.edit`](@code-self-ref),
 referring to the command of the preferred editor, for instance `vim`.
 
 `$JULIA_EDITOR` takes precedence over `$VISUAL`, which in turn takes precedence
@@ -192,12 +192,12 @@ exists, or `emacs` otherwise.
 
 ### `JULIA_CPU_THREADS`
 
-Overrides the global variable [`Base.Sys.CPU_THREADS`](@ref), the number of
+Overrides the global variable [`Base.Sys.CPU_THREADS`](@code-self-ref), the number of
 logical CPU cores available.
 
 ### `JULIA_WORKER_TIMEOUT`
 
-A [`Float64`](@ref) that sets the value of `Distributed.worker_timeout()` (default: `60.0`).
+A [`Float64`](@code-self-ref) that sets the value of `Distributed.worker_timeout()` (default: `60.0`).
 This function gives the number of seconds a worker process will wait for
 a master process to establish a connection before dying.
 

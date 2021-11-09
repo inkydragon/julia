@@ -61,7 +61,7 @@ This is useful for preventing the propagation of `NaN` values in quantities that
 
 ## Boolean Operators
 
-The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#Operations) are supported on [`Bool`](@ref) types:
+The following [Boolean operators](https://en.wikipedia.org/wiki/Boolean_algebra#Operations) are supported on [`Bool`](@code-self-ref) types:
 
 | Expression | Name                                                    |
 |:---------- |:--------------------------------------------------------|
@@ -205,7 +205,7 @@ as `a .= a .+ b`, where `.=` is a fused *in-place* assignment operation
 
 Note the dot syntax is also applicable to user-defined operators.
 For example, if you define `⊗(A,B) = kron(A,B)` to give a convenient
-infix syntax `A ⊗ B` for Kronecker products ([`kron`](@ref)), then
+infix syntax `A ⊗ B` for Kronecker products ([`kron`](@code-self-ref)), then
 `[A,B] .⊗ [C,D]` will compute `[A⊗C, B⊗D]` with no additional coding.
 
 Combining dot operators with numeric literals can be ambiguous.
@@ -219,12 +219,12 @@ Standard comparison operations are defined for all the primitive numeric types:
 
 | Operator                     | Name                     |
 |:---------------------------- |:------------------------ |
-| [`==`](@ref)                 | equality                 |
-| [`!=`](@ref), [`≠`](@ref !=) | inequality               |
-| [`<`](@ref)                  | less than                |
-| [`<=`](@ref), [`≤`](@ref <=) | less than or equal to    |
-| [`>`](@ref)                  | greater than             |
-| [`>=`](@ref), [`≥`](@ref >=) | greater than or equal to |
+| [`==`](@code-self-ref)                 | equality                 |
+| [`!=`](@code-self-ref), [`≠`](@ref !=) | inequality               |
+| [`<`](@code-self-ref)                  | less than                |
+| [`<=`](@code-self-ref), [`≤`](@ref <=) | less than or equal to    |
+| [`>`](@code-self-ref)                  | greater than             |
+| [`>=`](@code-self-ref), [`≥`](@ref >=) | greater than or equal to |
 
 Here are some simple examples:
 
@@ -300,12 +300,12 @@ situations like hash key comparisons:
 
 | Function                | Tests if                  |
 |:----------------------- |:------------------------- |
-| [`isequal(x, y)`](@ref) | `x` and `y` are identical |
-| [`isfinite(x)`](@ref)   | `x` is a finite number    |
-| [`isinf(x)`](@ref)      | `x` is infinite           |
-| [`isnan(x)`](@ref)      | `x` is not a number       |
+| [`isequal(x, y)`](@code-self-ref) | `x` and `y` are identical |
+| [`isfinite(x)`](@code-self-ref)   | `x` is a finite number    |
+| [`isinf(x)`](@code-self-ref)      | `x` is infinite           |
+| [`isnan(x)`](@code-self-ref)      | `x` is not a number       |
 
-[`isequal`](@ref) considers `NaN`s equal to each other:
+[`isequal`](@code-self-ref) considers `NaN`s equal to each other:
 
 ```jldoctest
 julia> isequal(NaN, NaN)
@@ -331,9 +331,9 @@ false
 Mixed-type comparisons between signed integers, unsigned integers, and floats can be tricky. A
 great deal of care has been taken to ensure that Julia does them correctly.
 
-For other types, `isequal` defaults to calling [`==`](@ref), so if you want to define
-equality for your own types then you only need to add a [`==`](@ref) method.  If you define
-your own equality function, you should probably define a corresponding [`hash`](@ref) method
+For other types, `isequal` defaults to calling [`==`](@code-self-ref), so if you want to define
+equality for your own types then you only need to add a [`==`](@code-self-ref) method.  If you define
+your own equality function, you should probably define a corresponding [`hash`](@code-self-ref) method
 to ensure that `isequal(x,y)` implies `hash(x) == hash(y)`.
 
 ### Chaining comparisons
@@ -347,7 +347,7 @@ true
 ```
 
 Chaining comparisons is often quite convenient in numerical code. Chained comparisons use the
-`&&` operator for scalar comparisons, and the [`&`](@ref) operator for elementwise comparisons,
+`&&` operator for scalar comparisons, and the [`&`](@code-self-ref) operator for elementwise comparisons,
 which allows them to work on arrays. For example, `0 .< A .< 1` gives a boolean array whose entries
 are true where the corresponding elements of `A` are between 0 and 1.
 
@@ -513,61 +513,61 @@ See [Conversion and Promotion](@ref conversion-and-promotion) for how to define 
 
 | Function              | Description                      | Return type |
 |:--------------------- |:-------------------------------- |:----------- |
-| [`round(x)`](@ref)    | round `x` to the nearest integer | `typeof(x)` |
-| [`round(T, x)`](@ref) | round `x` to the nearest integer | `T`         |
-| [`floor(x)`](@ref)    | round `x` towards `-Inf`         | `typeof(x)` |
-| [`floor(T, x)`](@ref) | round `x` towards `-Inf`         | `T`         |
-| [`ceil(x)`](@ref)     | round `x` towards `+Inf`         | `typeof(x)` |
-| [`ceil(T, x)`](@ref)  | round `x` towards `+Inf`         | `T`         |
-| [`trunc(x)`](@ref)    | round `x` towards zero           | `typeof(x)` |
-| [`trunc(T, x)`](@ref) | round `x` towards zero           | `T`         |
+| [`round(x)`](@code-self-ref)    | round `x` to the nearest integer | `typeof(x)` |
+| [`round(T, x)`](@code-self-ref) | round `x` to the nearest integer | `T`         |
+| [`floor(x)`](@code-self-ref)    | round `x` towards `-Inf`         | `typeof(x)` |
+| [`floor(T, x)`](@code-self-ref) | round `x` towards `-Inf`         | `T`         |
+| [`ceil(x)`](@code-self-ref)     | round `x` towards `+Inf`         | `typeof(x)` |
+| [`ceil(T, x)`](@code-self-ref)  | round `x` towards `+Inf`         | `T`         |
+| [`trunc(x)`](@code-self-ref)    | round `x` towards zero           | `typeof(x)` |
+| [`trunc(T, x)`](@code-self-ref) | round `x` towards zero           | `T`         |
 
 ### Division functions
 
 | Function                  | Description                                                                                               |
 |:------------------------- |:--------------------------------------------------------------------------------------------------------- |
-| [`div(x,y)`](@ref), `x÷y` | truncated division; quotient rounded towards zero                                                         |
-| [`fld(x,y)`](@ref)        | floored division; quotient rounded towards `-Inf`                                                         |
-| [`cld(x,y)`](@ref)        | ceiling division; quotient rounded towards `+Inf`                                                         |
-| [`rem(x,y)`](@ref)        | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
-| [`mod(x,y)`](@ref)        | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
-| [`mod1(x,y)`](@ref)       | `mod` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)`   |
-| [`mod2pi(x)`](@ref)       | modulus with respect to 2pi;  `0 <= mod2pi(x) < 2pi`                                                      |
-| [`divrem(x,y)`](@ref)     | returns `(div(x,y),rem(x,y))`                                                                             |
-| [`fldmod(x,y)`](@ref)     | returns `(fld(x,y),mod(x,y))`                                                                             |
-| [`gcd(x,y...)`](@ref)     | greatest positive common divisor of `x`, `y`,...                                                          |
-| [`lcm(x,y...)`](@ref)     | least positive common multiple of `x`, `y`,...                                                            |
+| [`div(x,y)`](@code-self-ref), `x÷y` | truncated division; quotient rounded towards zero                                                         |
+| [`fld(x,y)`](@code-self-ref)        | floored division; quotient rounded towards `-Inf`                                                         |
+| [`cld(x,y)`](@code-self-ref)        | ceiling division; quotient rounded towards `+Inf`                                                         |
+| [`rem(x,y)`](@code-self-ref)        | remainder; satisfies `x == div(x,y)*y + rem(x,y)`; sign matches `x`                                       |
+| [`mod(x,y)`](@code-self-ref)        | modulus; satisfies `x == fld(x,y)*y + mod(x,y)`; sign matches `y`                                         |
+| [`mod1(x,y)`](@code-self-ref)       | `mod` with offset 1; returns `r∈(0,y]` for `y>0` or `r∈[y,0)` for `y<0`, where `mod(r, y) == mod(x, y)`   |
+| [`mod2pi(x)`](@code-self-ref)       | modulus with respect to 2pi;  `0 <= mod2pi(x) < 2pi`                                                      |
+| [`divrem(x,y)`](@code-self-ref)     | returns `(div(x,y),rem(x,y))`                                                                             |
+| [`fldmod(x,y)`](@code-self-ref)     | returns `(fld(x,y),mod(x,y))`                                                                             |
+| [`gcd(x,y...)`](@code-self-ref)     | greatest positive common divisor of `x`, `y`,...                                                          |
+| [`lcm(x,y...)`](@code-self-ref)     | least positive common multiple of `x`, `y`,...                                                            |
 
 ### Sign and absolute value functions
 
 | Function                | Description                                                |
 |:----------------------- |:---------------------------------------------------------- |
-| [`abs(x)`](@ref)        | a positive value with the magnitude of `x`                 |
-| [`abs2(x)`](@ref)       | the squared magnitude of `x`                               |
-| [`sign(x)`](@ref)       | indicates the sign of `x`, returning -1, 0, or +1          |
-| [`signbit(x)`](@ref)    | indicates whether the sign bit is on (true) or off (false) |
-| [`copysign(x,y)`](@ref) | a value with the magnitude of `x` and the sign of `y`      |
-| [`flipsign(x,y)`](@ref) | a value with the magnitude of `x` and the sign of `x*y`    |
+| [`abs(x)`](@code-self-ref)        | a positive value with the magnitude of `x`                 |
+| [`abs2(x)`](@code-self-ref)       | the squared magnitude of `x`                               |
+| [`sign(x)`](@code-self-ref)       | indicates the sign of `x`, returning -1, 0, or +1          |
+| [`signbit(x)`](@code-self-ref)    | indicates whether the sign bit is on (true) or off (false) |
+| [`copysign(x,y)`](@code-self-ref) | a value with the magnitude of `x` and the sign of `y`      |
+| [`flipsign(x,y)`](@code-self-ref) | a value with the magnitude of `x` and the sign of `x*y`    |
 
 ### Powers, logs and roots
 
 | Function                 | Description                                                                |
 |:------------------------ |:-------------------------------------------------------------------------- |
-| [`sqrt(x)`](@ref), `√x`  | square root of `x`                                                         |
-| [`cbrt(x)`](@ref), `∛x`  | cube root of `x`                                                           |
-| [`hypot(x,y)`](@ref)     | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
-| [`exp(x)`](@ref)         | natural exponential function at `x`                                        |
-| [`expm1(x)`](@ref)       | accurate `exp(x)-1` for `x` near zero                                      |
-| [`ldexp(x,n)`](@ref)     | `x*2^n` computed efficiently for integer values of `n`                     |
-| [`log(x)`](@ref)         | natural logarithm of `x`                                                   |
-| [`log(b,x)`](@ref)       | base `b` logarithm of `x`                                                  |
-| [`log2(x)`](@ref)        | base 2 logarithm of `x`                                                    |
-| [`log10(x)`](@ref)       | base 10 logarithm of `x`                                                   |
-| [`log1p(x)`](@ref)       | accurate `log(1+x)` for `x` near zero                                      |
-| [`exponent(x)`](@ref)    | binary exponent of `x`                                                     |
-| [`significand(x)`](@ref) | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
+| [`sqrt(x)`](@code-self-ref), `√x`  | square root of `x`                                                         |
+| [`cbrt(x)`](@code-self-ref), `∛x`  | cube root of `x`                                                           |
+| [`hypot(x,y)`](@code-self-ref)     | hypotenuse of right-angled triangle with other sides of length `x` and `y` |
+| [`exp(x)`](@code-self-ref)         | natural exponential function at `x`                                        |
+| [`expm1(x)`](@code-self-ref)       | accurate `exp(x)-1` for `x` near zero                                      |
+| [`ldexp(x,n)`](@code-self-ref)     | `x*2^n` computed efficiently for integer values of `n`                     |
+| [`log(x)`](@code-self-ref)         | natural logarithm of `x`                                                   |
+| [`log(b,x)`](@code-self-ref)       | base `b` logarithm of `x`                                                  |
+| [`log2(x)`](@code-self-ref)        | base 2 logarithm of `x`                                                    |
+| [`log10(x)`](@code-self-ref)       | base 10 logarithm of `x`                                                   |
+| [`log1p(x)`](@code-self-ref)       | accurate `log(1+x)` for `x` near zero                                      |
+| [`exponent(x)`](@code-self-ref)    | binary exponent of `x`                                                     |
+| [`significand(x)`](@code-self-ref) | binary significand (a.k.a. mantissa) of a floating-point number `x`        |
 
-For an overview of why functions like [`hypot`](@ref), [`expm1`](@ref), and [`log1p`](@ref)
+For an overview of why functions like [`hypot`](@code-self-ref), [`expm1`](@code-self-ref), and [`log1p`](@code-self-ref)
 are necessary and useful, see John D. Cook's excellent pair of blog posts on the subject: [expm1, log1p, erfc](https://www.johndcook.com/blog/2010/06/07/math-library-functions-that-seem-unnecessary/),
 and [hypot](https://www.johndcook.com/blog/2010/06/02/whats-so-hard-about-finding-a-hypotenuse/).
 
@@ -583,14 +583,14 @@ asinh  acosh  atanh  acoth  asech  acsch
 sinc   cosc
 ```
 
-These are all single-argument functions, with [`atan`](@ref) also accepting two arguments
+These are all single-argument functions, with [`atan`](@code-self-ref) also accepting two arguments
 corresponding to a traditional [`atan2`](https://en.wikipedia.org/wiki/Atan2) function.
 
-Additionally, [`sinpi(x)`](@ref) and [`cospi(x)`](@ref) are provided for more accurate computations
-of [`sin(pi*x)`](@ref) and [`cos(pi*x)`](@ref) respectively.
+Additionally, [`sinpi(x)`](@code-self-ref) and [`cospi(x)`](@code-self-ref) are provided for more accurate computations
+of [`sin(pi*x)`](@code-self-ref) and [`cos(pi*x)`](@code-self-ref) respectively.
 
 In order to compute trigonometric functions with degrees instead of radians, suffix the function
-with `d`. For example, [`sind(x)`](@ref) computes the sine of `x` where `x` is specified in degrees.
+with `d`. For example, [`sind(x)`](@code-self-ref) computes the sine of `x` where `x` is specified in degrees.
 The complete list of trigonometric functions with degree variants is:
 
 ```

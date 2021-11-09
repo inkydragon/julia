@@ -10,12 +10,12 @@ This sort of scenario falls in the domain of asynchronous programming, sometimes
 also referred to as concurrent programming (since, conceptually, multiple things
 are happening at once).
 
-To address these scenarios, Julia provides [`Task`](@ref)s (also known by several other
+To address these scenarios, Julia provides [`Task`](@code-self-ref)s (also known by several other
 names, such as symmetric coroutines, lightweight threads, cooperative multitasking,
 or one-shot continuations).
 When a piece of computing work (in practice, executing a particular function) is designated as
-a [`Task`](@ref), it becomes possible to interrupt it by switching to another [`Task`](@ref).
-The original [`Task`](@ref) can later be resumed, at which point it will pick up right where it
+a [`Task`](@code-self-ref), it becomes possible to interrupt it by switching to another [`Task`](@code-self-ref).
+The original [`Task`](@code-self-ref) can later be resumed, at which point it will pick up right where it
 left off. At first, this may seem similar to a function call. However there are two key differences.
 First, switching tasks does not use any space, so any number of task switches can occur without
 consuming the call stack. Second, switching among tasks can occur in any order, unlike function
@@ -26,7 +26,7 @@ calls, where the called function must finish executing before control returns to
 You can think of a `Task` as a handle to a unit of computational work to be performed.
 It has a create-start-run-finish lifecycle.
 Tasks are created by calling the `Task` constructor on a 0-argument function to run,
-or using the [`@task`](@ref) macro:
+or using the [`@task`](@code-self-ref) macro:
 
 ```julia-repl
 julia> t = @task begin; sleep(5); println("done"); end
@@ -36,7 +36,7 @@ Task (runnable) @0x00007f13a40c0eb0
 `@task x` is equivalent to `Task(()->x)`.
 
 This task will wait for five seconds, and then print `done`. However, it has not
-started running yet. We can run it whenever we're ready by calling [`schedule`](@ref):
+started running yet. We can run it whenever we're ready by calling [`schedule`](@code-self-ref):
 
 ```julia-repl
 julia> schedule(t);
@@ -47,12 +47,12 @@ That is because it simply adds `t` to an internal queue of tasks to run.
 Then, the REPL will print the next prompt and wait for more input.
 Waiting for keyboard input provides an opportunity for other tasks to run,
 so at that point `t` will start.
-`t` calls [`sleep`](@ref), which sets a timer and stops execution.
+`t` calls [`sleep`](@code-self-ref), which sets a timer and stops execution.
 If other tasks have been scheduled, they could run then.
 After five seconds, the timer fires and restarts `t`, and you will see `done`
 printed. `t` is then finished.
 
-The [`wait`](@ref) function blocks the calling task until some other task finishes.
+The [`wait`](@code-self-ref) function blocks the calling task until some other task finishes.
 So for example if you type
 
 ```julia-repl
@@ -64,7 +64,7 @@ the next input prompt appears. That is because the REPL is waiting for `t`
 to finish before proceeding.
 
 It is common to want to create a task and schedule it right away, so the
-macro [`@async`](@ref) is provided for that purpose --- `@async x` is
+macro [`@async`](@code-self-ref) is provided for that purpose --- `@async x` is
 equivalent to `schedule(@task x)`.
 
 ## Communicating with Channels
@@ -77,14 +77,14 @@ them. The consumer cannot simply call a producer function to get a value, becaus
 may have more values to generate and so might not yet be ready to return. With tasks, the producer
 and consumer can both run as long as they need to, passing values back and forth as necessary.
 
-Julia provides a [`Channel`](@ref) mechanism for solving this problem.
-A [`Channel`](@ref) is a waitable first-in first-out queue which can have
+Julia provides a [`Channel`](@code-self-ref) mechanism for solving this problem.
+A [`Channel`](@code-self-ref) is a waitable first-in first-out queue which can have
 multiple tasks reading from and writing to it.
 
-Let's define a producer task, which produces values via the [`put!`](@ref) call.
-To consume values, we need to schedule the producer to run in a new task. A special [`Channel`](@ref)
+Let's define a producer task, which produces values via the [`put!`](@code-self-ref) call.
+To consume values, we need to schedule the producer to run in a new task. A special [`Channel`](@code-self-ref)
 constructor which accepts a 1-arg function as an argument can be used to run a task bound to a channel.
-We can then [`take!`](@ref) values repeatedly from the channel object:
+We can then [`take!`](@code-self-ref) values repeatedly from the channel object:
 
 ```jldoctest producer
 julia> function producer(c::Channel)
@@ -117,9 +117,9 @@ julia> take!(chnl)
 ```
 
 One way to think of this behavior is that `producer` was able to return multiple times. Between
-calls to [`put!`](@ref), the producer's execution is suspended and the consumer has control.
+calls to [`put!`](@code-self-ref), the producer's execution is suspended and the consumer has control.
 
-The returned [`Channel`](@ref) can be used as an iterable object in a `for` loop, in which case the
+The returned [`Channel`](@code-self-ref) can be used as an iterable object in a `for` loop, in which case the
 loop variable takes on all the produced values. The loop is terminated when the channel is closed.
 
 ```jldoctest producer
@@ -135,16 +135,16 @@ stop
 ```
 
 Note that we did not have to explicitly close the channel in the producer. This is because
-the act of binding a [`Channel`](@ref) to a [`Task`](@ref) associates the open lifetime of
+the act of binding a [`Channel`](@code-self-ref) to a [`Task`](@code-self-ref) associates the open lifetime of
 a channel with that of the bound task. The channel object is closed automatically when the task
 terminates. Multiple channels can be bound to a task, and vice-versa.
 
-While the [`Task`](@ref) constructor expects a 0-argument function, the [`Channel`](@ref)
+While the [`Task`](@code-self-ref) constructor expects a 0-argument function, the [`Channel`](@code-self-ref)
 method that creates a task-bound channel expects a function that accepts a single argument of
-type [`Channel`](@ref). A common pattern is for the producer to be parameterized, in which case a partial
+type [`Channel`](@code-self-ref). A common pattern is for the producer to be parameterized, in which case a partial
 function application is needed to create a 0 or 1 argument [anonymous function](@ref man-anonymous-functions).
 
-For [`Task`](@ref) objects this can be done either directly or by use of a convenience macro:
+For [`Task`](@code-self-ref) objects this can be done either directly or by use of a convenience macro:
 
 ```julia
 function mytask(myarg)
@@ -156,17 +156,17 @@ taskHdl = Task(() -> mytask(7))
 taskHdl = @task mytask(7)
 ```
 
-To orchestrate more advanced work distribution patterns, [`bind`](@ref) and [`schedule`](@ref)
-can be used in conjunction with [`Task`](@ref) and [`Channel`](@ref)
+To orchestrate more advanced work distribution patterns, [`bind`](@code-self-ref) and [`schedule`](@code-self-ref)
+can be used in conjunction with [`Task`](@code-self-ref) and [`Channel`](@code-self-ref)
 constructors to explicitly link a set of channels with a set of producer/consumer tasks.
 
 ### More on Channels
 
 A channel can be visualized as a pipe, i.e., it has a write end and a read end :
 
-  * Multiple writers in different tasks can write to the same channel concurrently via [`put!`](@ref)
+  * Multiple writers in different tasks can write to the same channel concurrently via [`put!`](@code-self-ref)
     calls.
-  * Multiple readers in different tasks can read data concurrently via [`take!`](@ref) calls.
+  * Multiple readers in different tasks can read data concurrently via [`take!`](@code-self-ref) calls.
   * As an example:
 
     ```julia
@@ -194,13 +194,13 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
     to the maximum number of elements that can be held in the channel at any time. For example, `Channel(32)`
     creates a channel that can hold a maximum of 32 objects of any type. A `Channel{MyType}(64)` can
     hold up to 64 objects of `MyType` at any time.
-  * If a [`Channel`](@ref) is empty, readers (on a [`take!`](@ref) call) will block until data is available.
-  * If a [`Channel`](@ref) is full, writers (on a [`put!`](@ref) call) will block until space becomes available.
-  * [`isready`](@ref) tests for the presence of any object in the channel, while [`wait`](@ref)
+  * If a [`Channel`](@code-self-ref) is empty, readers (on a [`take!`](@code-self-ref) call) will block until data is available.
+  * If a [`Channel`](@code-self-ref) is full, writers (on a [`put!`](@code-self-ref) call) will block until space becomes available.
+  * [`isready`](@code-self-ref) tests for the presence of any object in the channel, while [`wait`](@code-self-ref)
     waits for an object to become available.
-  * A [`Channel`](@ref) is in an open state initially. This means that it can be read from and written to
-    freely via [`take!`](@ref) and [`put!`](@ref) calls. [`close`](@ref) closes a [`Channel`](@ref).
-    On a closed [`Channel`](@ref), [`put!`](@ref) will fail. For example:
+  * A [`Channel`](@code-self-ref) is in an open state initially. This means that it can be read from and written to
+    freely via [`take!`](@code-self-ref) and [`put!`](@code-self-ref) calls. [`close`](@code-self-ref) closes a [`Channel`](@code-self-ref).
+    On a closed [`Channel`](@code-self-ref), [`put!`](@code-self-ref) will fail. For example:
 
     ```julia-repl
     julia> c = Channel(2);
@@ -216,7 +216,7 @@ A channel can be visualized as a pipe, i.e., it has a write end and a read end :
     [...]
     ```
 
-  * [`take!`](@ref) and [`fetch`](@ref) (which retrieves but does not remove the value) on a closed
+  * [`take!`](@code-self-ref) and [`fetch`](@code-self-ref) (which retrieves but does not remove the value) on a closed
     channel successfully return any existing values until it is emptied. Continuing the above example:
 
     ```julia-repl
@@ -295,27 +295,27 @@ the exception everywhere.
 
 ## More task operations
 
-Task operations are built on a low-level primitive called [`yieldto`](@ref).
+Task operations are built on a low-level primitive called [`yieldto`](@code-self-ref).
 `yieldto(task, value)` suspends the current task, switches to the specified `task`, and causes
-that task's last [`yieldto`](@ref) call to return the specified `value`. Notice that [`yieldto`](@ref)
+that task's last [`yieldto`](@code-self-ref) call to return the specified `value`. Notice that [`yieldto`](@code-self-ref)
 is the only operation required to use task-style control flow; instead of calling and returning
 we are always just switching to a different task. This is why this feature is also called "symmetric
 coroutines"; each task is switched to and from using the same mechanism.
 
-[`yieldto`](@ref) is powerful, but most uses of tasks do not invoke it directly. Consider why
+[`yieldto`](@code-self-ref) is powerful, but most uses of tasks do not invoke it directly. Consider why
 this might be. If you switch away from the current task, you will probably want to switch back
 to it at some point, but knowing when to switch back, and knowing which task has the responsibility
-of switching back, can require considerable coordination. For example, [`put!`](@ref) and [`take!`](@ref)
+of switching back, can require considerable coordination. For example, [`put!`](@code-self-ref) and [`take!`](@code-self-ref)
 are blocking operations, which, when used in the context of channels maintain state to remember
-who the consumers are. Not needing to manually keep track of the consuming task is what makes [`put!`](@ref)
-easier to use than the low-level [`yieldto`](@ref).
+who the consumers are. Not needing to manually keep track of the consuming task is what makes [`put!`](@code-self-ref)
+easier to use than the low-level [`yieldto`](@code-self-ref).
 
-In addition to [`yieldto`](@ref), a few other basic functions are needed to use tasks effectively.
+In addition to [`yieldto`](@code-self-ref), a few other basic functions are needed to use tasks effectively.
 
-  * [`current_task`](@ref) gets a reference to the currently-running task.
-  * [`istaskdone`](@ref) queries whether a task has exited.
-  * [`istaskstarted`](@ref) queries whether a task has run yet.
-  * [`task_local_storage`](@ref) manipulates a key-value store specific to the current task.
+  * [`current_task`](@code-self-ref) gets a reference to the currently-running task.
+  * [`istaskdone`](@code-self-ref) queries whether a task has exited.
+  * [`istaskstarted`](@code-self-ref) queries whether a task has run yet.
+  * [`task_local_storage`](@code-self-ref) manipulates a key-value store specific to the current task.
 
 ## Tasks and events
 
@@ -323,19 +323,19 @@ Most task switches occur as a result of waiting for events such as I/O requests,
 by a scheduler included in Julia Base. The scheduler maintains a queue of runnable tasks,
 and executes an event loop that restarts tasks based on external events such as message arrival.
 
-The basic function for waiting for an event is [`wait`](@ref). Several objects implement [`wait`](@ref);
-for example, given a `Process` object, [`wait`](@ref) will wait for it to exit. [`wait`](@ref)
-is often implicit; for example, a [`wait`](@ref) can happen inside a call to [`read`](@ref)
+The basic function for waiting for an event is [`wait`](@code-self-ref). Several objects implement [`wait`](@code-self-ref);
+for example, given a `Process` object, [`wait`](@code-self-ref) will wait for it to exit. [`wait`](@code-self-ref)
+is often implicit; for example, a [`wait`](@code-self-ref) can happen inside a call to [`read`](@code-self-ref)
 to wait for data to be available.
 
-In all of these cases, [`wait`](@ref) ultimately operates on a [`Condition`](@ref) object, which
-is in charge of queueing and restarting tasks. When a task calls [`wait`](@ref) on a [`Condition`](@ref),
+In all of these cases, [`wait`](@code-self-ref) ultimately operates on a [`Condition`](@code-self-ref) object, which
+is in charge of queueing and restarting tasks. When a task calls [`wait`](@code-self-ref) on a [`Condition`](@code-self-ref),
 the task is marked as non-runnable, added to the condition's queue, and switches to the scheduler.
 The scheduler will then pick another task to run, or block waiting for external events. If all
-goes well, eventually an event handler will call [`notify`](@ref) on the condition, which causes
+goes well, eventually an event handler will call [`notify`](@code-self-ref) on the condition, which causes
 tasks waiting for that condition to become runnable again.
 
-A task created explicitly by calling [`Task`](@ref) is initially not known to the scheduler. This
-allows you to manage tasks manually using [`yieldto`](@ref) if you wish. However, when such
+A task created explicitly by calling [`Task`](@code-self-ref) is initially not known to the scheduler. This
+allows you to manage tasks manually using [`yieldto`](@code-self-ref) if you wish. However, when such
 a task waits for an event, it still gets restarted automatically when the event happens, as you
 would expect.

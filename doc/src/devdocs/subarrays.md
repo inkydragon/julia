@@ -1,10 +1,10 @@
 # SubArrays
 
-Julia's `SubArray` type is a container encoding a "view" of a parent [`AbstractArray`](@ref).  This page
+Julia's `SubArray` type is a container encoding a "view" of a parent [`AbstractArray`](@code-self-ref).  This page
 documents some of the design principles and implementation of `SubArray`s.
 
-One of the major design goals is to ensure high performance for views of both [`IndexLinear`](@ref) and
-[`IndexCartesian`](@ref) arrays. Furthermore, views of `IndexLinear` arrays should themselves be
+One of the major design goals is to ensure high performance for views of both [`IndexLinear`](@code-self-ref) and
+[`IndexCartesian`](@code-self-ref) arrays. Furthermore, views of `IndexLinear` arrays should themselves be
 `IndexLinear` to the extent that it is possible.
 
 ## Index replacement
@@ -114,7 +114,7 @@ expands to
 Base.reindex(S1, S1.indices, (i, j)) == (i, S1.indices[2], S1.indices[3][j])
 ```
 
-for any pair of indices `(i,j)` (except [`CartesianIndex`](@ref)s and arrays thereof, see below).
+for any pair of indices `(i,j)` (except [`CartesianIndex`](@code-self-ref)s and arrays thereof, see below).
 
 This is the core of a `SubArray`; indexing methods depend upon `reindex` to do this index translation.
 Sometimes, though, we can avoid the indirection and make it even faster.
@@ -215,7 +215,7 @@ then `A[2:2:4,:]` does not have uniform stride, so we cannot guarantee efficient
     if possible. Consequently, `view` ensures that the parent array is the appropriate dimensionality
     for the given indices by reshaping it if needed. The inner `SubArray` constructor ensures that
     this invariant is satisfied.
-  * [`CartesianIndex`](@ref) and arrays thereof throw a nasty wrench into the `reindex` scheme. Recall that
+  * [`CartesianIndex`](@code-self-ref) and arrays thereof throw a nasty wrench into the `reindex` scheme. Recall that
     `reindex` simply dispatches on the type of the stored indices in order to determine how many passed
     indices should be used and where they should go. But with `CartesianIndex`, there's no longer
     a one-to-one correspondence between the number of passed arguments and the number of dimensions

@@ -2,7 +2,7 @@
 
 ## [Iteration](@id lib-collections-iteration)
 
-Sequential iteration is implemented by the [`iterate`](@ref) function.
+Sequential iteration is implemented by the [`iterate`](@code-self-ref) function.
 The general `for` loop:
 
 ```julia
@@ -34,20 +34,20 @@ Base.IteratorEltype
 
 Fully implemented by:
 
-  * [`AbstractRange`](@ref)
-  * [`UnitRange`](@ref)
+  * [`AbstractRange`](@code-self-ref)
+  * [`UnitRange`](@code-self-ref)
   * `Tuple`
   * `Number`
-  * [`AbstractArray`](@ref)
-  * [`BitSet`](@ref)
-  * [`IdDict`](@ref)
-  * [`Dict`](@ref)
-  * [`WeakKeyDict`](@ref)
+  * [`AbstractArray`](@code-self-ref)
+  * [`BitSet`](@code-self-ref)
+  * [`IdDict`](@code-self-ref)
+  * [`Dict`](@code-self-ref)
+  * [`WeakKeyDict`](@code-self-ref)
   * `EachLine`
   * `AbstractString`
-  * [`Set`](@ref)
-  * [`Pair`](@ref)
-  * [`NamedTuple`](@ref)
+  * [`Set`](@code-self-ref)
+  * [`Pair`](@code-self-ref)
+  * [`NamedTuple`](@code-self-ref)
 
 ## Constructors and Types
 
@@ -71,18 +71,18 @@ Base.checked_length
 
 Fully implemented by:
 
-  * [`AbstractRange`](@ref)
-  * [`UnitRange`](@ref)
+  * [`AbstractRange`](@code-self-ref)
+  * [`UnitRange`](@code-self-ref)
   * `Tuple`
   * `Number`
-  * [`AbstractArray`](@ref)
-  * [`BitSet`](@ref)
-  * [`IdDict`](@ref)
-  * [`Dict`](@ref)
-  * [`WeakKeyDict`](@ref)
+  * [`AbstractArray`](@code-self-ref)
+  * [`BitSet`](@code-self-ref)
+  * [`IdDict`](@code-self-ref)
+  * [`Dict`](@code-self-ref)
+  * [`WeakKeyDict`](@code-self-ref)
   * `AbstractString`
-  * [`Set`](@ref)
-  * [`NamedTuple`](@ref)
+  * [`Set`](@code-self-ref)
+  * [`NamedTuple`](@code-self-ref)
 
 ## Iterable Collections
 
@@ -151,36 +151,36 @@ Base.lastindex
 
 Fully implemented by:
 
-  * [`Array`](@ref)
-  * [`BitArray`](@ref)
-  * [`AbstractArray`](@ref)
+  * [`Array`](@code-self-ref)
+  * [`BitArray`](@code-self-ref)
+  * [`AbstractArray`](@code-self-ref)
   * `SubArray`
 
 Partially implemented by:
 
-  * [`AbstractRange`](@ref)
-  * [`UnitRange`](@ref)
+  * [`AbstractRange`](@code-self-ref)
+  * [`UnitRange`](@code-self-ref)
   * `Tuple`
   * `AbstractString`
-  * [`Dict`](@ref)
-  * [`IdDict`](@ref)
-  * [`WeakKeyDict`](@ref)
-  * [`NamedTuple`](@ref)
+  * [`Dict`](@code-self-ref)
+  * [`IdDict`](@code-self-ref)
+  * [`WeakKeyDict`](@code-self-ref)
+  * [`NamedTuple`](@code-self-ref)
 
 ## Dictionaries
 
-[`Dict`](@ref) is the standard dictionary. Its implementation uses [`hash`](@ref)
-as the hashing function for the key, and [`isequal`](@ref) to determine equality. Define these
+[`Dict`](@code-self-ref) is the standard dictionary. Its implementation uses [`hash`](@code-self-ref)
+as the hashing function for the key, and [`isequal`](@code-self-ref) to determine equality. Define these
 two functions for custom types to override how they are stored in a hash table.
 
-[`IdDict`](@ref) is a special hash table where the keys are always object identities.
+[`IdDict`](@code-self-ref) is a special hash table where the keys are always object identities.
 
-[`WeakKeyDict`](@ref) is a hash table implementation where the keys are weak references to objects, and
+[`WeakKeyDict`](@code-self-ref) is a hash table implementation where the keys are weak references to objects, and
 thus may be garbage collected even when referenced in a hash table.
 Like `Dict` it uses `hash` for hashing and `isequal` for equality, unlike `Dict` it does
 not convert keys on insertion.
 
-[`Dict`](@ref)s can be created by passing pair objects constructed with `=>` to a [`Dict`](@ref)
+[`Dict`](@code-self-ref)s can be created by passing pair objects constructed with `=>` to a [`Dict`](@code-self-ref)
 constructor: `Dict("A"=>1, "B"=>2)`. This call will attempt to infer type information from the
 keys and values (i.e. this example creates a `Dict{String, Int64}`). To explicitly specify types
 use the syntax `Dict{KeyType,ValueType}(...)`. For example, `Dict{String,Int32}("A"=>1, "B"=>2)`.
@@ -218,19 +218,19 @@ Base.valtype
 
 Fully implemented by:
 
-  * [`IdDict`](@ref)
-  * [`Dict`](@ref)
-  * [`WeakKeyDict`](@ref)
+  * [`IdDict`](@code-self-ref)
+  * [`Dict`](@code-self-ref)
+  * [`WeakKeyDict`](@code-self-ref)
 
 Partially implemented by:
 
-  * [`BitSet`](@ref)
-  * [`Set`](@ref)
+  * [`BitSet`](@code-self-ref)
+  * [`Set`](@code-self-ref)
   * [`EnvDict`](@ref Base.EnvDict)
-  * [`Array`](@ref)
-  * [`BitArray`](@ref)
+  * [`Array`](@code-self-ref)
+  * [`BitArray`](@code-self-ref)
   * [`ImmutableDict`](@ref Base.ImmutableDict)
-  * [`Iterators.Pairs`](@ref)
+  * [`Iterators.Pairs`](@code-self-ref)
 
 ## Set-Like Collections
 
@@ -255,12 +255,12 @@ Base.isdisjoint
 
 Fully implemented by:
 
-  * [`BitSet`](@ref)
-  * [`Set`](@ref)
+  * [`BitSet`](@code-self-ref)
+  * [`Set`](@code-self-ref)
 
 Partially implemented by:
 
-  * [`Array`](@ref)
+  * [`Array`](@code-self-ref)
 
 ## Dequeues
 
@@ -281,8 +281,8 @@ Base.prepend!
 
 Fully implemented by:
 
-  * `Vector` (a.k.a. 1-dimensional [`Array`](@ref))
-  * `BitVector` (a.k.a. 1-dimensional [`BitArray`](@ref))
+  * `Vector` (a.k.a. 1-dimensional [`Array`](@code-self-ref))
+  * `BitVector` (a.k.a. 1-dimensional [`BitArray`](@code-self-ref))
 
 ## Utility Collections
 

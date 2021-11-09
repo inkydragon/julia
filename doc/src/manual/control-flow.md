@@ -6,10 +6,10 @@ Julia provides a variety of control flow constructs:
   * [Conditional Evaluation](@ref man-conditional-evaluation): `if`-`elseif`-`else` and `?:` (ternary operator).
   * [Short-Circuit Evaluation](@ref): logical operators `&&` (“and”) and `||` (“or”), and also chained comparisons.
   * [Repeated Evaluation: Loops](@ref man-loops): `while` and `for`.
-  * [Exception Handling](@ref): `try`-`catch`, [`error`](@ref) and [`throw`](@ref).
-  * [Tasks (aka Coroutines)](@ref man-tasks): [`yieldto`](@ref).
+  * [Exception Handling](@ref): `try`-`catch`, [`error`](@code-self-ref) and [`throw`](@code-self-ref).
+  * [Tasks (aka Coroutines)](@ref man-tasks): [`yieldto`](@code-self-ref).
 
-The first five control flow mechanisms are standard to high-level programming languages. [`Task`](@ref)s
+The first five control flow mechanisms are standard to high-level programming languages. [`Task`](@code-self-ref)s
 are not so standard: they provide non-local control flow, making it possible to switch between
 temporarily-suspended computations. This is a powerful construct: both exception handling and
 cooperative multitasking are implemented in Julia using tasks. Everyday programming requires no
@@ -173,8 +173,8 @@ julia> if 1
 ERROR: TypeError: non-boolean (Int64) used in boolean context
 ```
 
-This error indicates that the conditional was of the wrong type: [`Int64`](@ref) rather
-than the required [`Bool`](@ref).
+This error indicates that the conditional was of the wrong type: [`Int64`](@code-self-ref) rather
+than the required [`Bool`](@code-self-ref).
 
 The so-called "ternary operator", `?:`, is closely related to the `if`-`elseif`-`else` syntax,
 but is used where a conditional choice between single expression values is required, as opposed
@@ -554,7 +554,7 @@ julia> for i = 1:2, j = 3:4
 If this example were rewritten to use a `for` keyword for each variable, then the output would
 be different: the second and fourth values would contain `0`.
 
-Multiple containers can be iterated over at the same time in a single `for` loop using [`zip`](@ref):
+Multiple containers can be iterated over at the same time in a single `for` loop using [`zip`](@code-self-ref):
 
 ```jldoctest
 julia> for (j, k) in zip([1 2 3], [4 5 6 7])
@@ -565,7 +565,7 @@ julia> for (j, k) in zip([1 2 3], [4 5 6 7])
 (3, 6)
 ```
 
-Using [`zip`](@ref) will create an iterator that is a tuple containing the subiterators for the containers passed to it.
+Using [`zip`](@code-self-ref) will create an iterator that is a tuple containing the subiterators for the containers passed to it.
 The `zip` iterator will iterate over all subiterators in order, choosing the ``i``th element of each subiterator in the
 ``i``th iteration of the `for` loop. Once any of the subiterators run out, the `for` loop will stop.
 
@@ -583,33 +583,33 @@ below all interrupt the normal flow of control.
 
 | `Exception`                   |
 |:----------------------------- |
-| [`ArgumentError`](@ref)       |
-| [`BoundsError`](@ref)         |
-| [`CompositeException`](@ref)  |
-| [`DimensionMismatch`](@ref)   |
-| [`DivideError`](@ref)         |
-| [`DomainError`](@ref)         |
-| [`EOFError`](@ref)            |
-| [`ErrorException`](@ref)      |
-| [`InexactError`](@ref)        |
-| [`InitError`](@ref)           |
-| [`InterruptException`](@ref)  |
+| [`ArgumentError`](@code-self-ref)       |
+| [`BoundsError`](@code-self-ref)         |
+| [`CompositeException`](@code-self-ref)  |
+| [`DimensionMismatch`](@code-self-ref)   |
+| [`DivideError`](@code-self-ref)         |
+| [`DomainError`](@code-self-ref)         |
+| [`EOFError`](@code-self-ref)            |
+| [`ErrorException`](@code-self-ref)      |
+| [`InexactError`](@code-self-ref)        |
+| [`InitError`](@code-self-ref)           |
+| [`InterruptException`](@code-self-ref)  |
 | `InvalidStateException`       |
-| [`KeyError`](@ref)            |
-| [`LoadError`](@ref)           |
-| [`OutOfMemoryError`](@ref)    |
-| [`ReadOnlyMemoryError`](@ref) |
-| [`RemoteException`](@ref)     |
-| [`MethodError`](@ref)         |
-| [`OverflowError`](@ref)       |
-| [`Meta.ParseError`](@ref)     |
-| [`SystemError`](@ref)         |
-| [`TypeError`](@ref)           |
-| [`UndefRefError`](@ref)       |
-| [`UndefVarError`](@ref)       |
-| [`StringIndexError`](@ref)    |
+| [`KeyError`](@code-self-ref)            |
+| [`LoadError`](@code-self-ref)           |
+| [`OutOfMemoryError`](@code-self-ref)    |
+| [`ReadOnlyMemoryError`](@code-self-ref) |
+| [`RemoteException`](@code-self-ref)     |
+| [`MethodError`](@code-self-ref)         |
+| [`OverflowError`](@code-self-ref)       |
+| [`Meta.ParseError`](@code-self-ref)     |
+| [`SystemError`](@code-self-ref)         |
+| [`TypeError`](@code-self-ref)           |
+| [`UndefRefError`](@code-self-ref)       |
+| [`UndefVarError`](@code-self-ref)       |
+| [`StringIndexError`](@code-self-ref)    |
 
-For example, the [`sqrt`](@ref) function throws a [`DomainError`](@ref) if applied to a negative
+For example, the [`sqrt`](@code-self-ref) function throws a [`DomainError`](@code-self-ref) if applied to a negative
 real value:
 
 ```jldoctest
@@ -626,10 +626,10 @@ You may define your own exceptions in the following way:
 julia> struct MyCustomException <: Exception end
 ```
 
-### The [`throw`](@ref) function
+### The [`throw`](@code-self-ref) function
 
-Exceptions can be created explicitly with [`throw`](@ref). For example, a function defined only
-for nonnegative numbers could be written to [`throw`](@ref) a [`DomainError`](@ref) if the argument
+Exceptions can be created explicitly with [`throw`](@code-self-ref). For example, a function defined only
+for nonnegative numbers could be written to [`throw`](@code-self-ref) a [`DomainError`](@code-self-ref) if the argument
 is negative:
 
 ```jldoctest; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
@@ -646,7 +646,7 @@ Stacktrace:
  [1] f(::Int64) at ./none:1
 ```
 
-Note that [`DomainError`](@ref) without parentheses is not an exception, but a type of exception.
+Note that [`DomainError`](@code-self-ref) without parentheses is not an exception, but a type of exception.
 It needs to be called to obtain an `Exception` object:
 
 ```jldoctest
@@ -664,7 +664,7 @@ julia> throw(UndefVarError(:x))
 ERROR: UndefVarError: x not defined
 ```
 
-This mechanism can be implemented easily by custom exception types following the way [`UndefVarError`](@ref)
+This mechanism can be implemented easily by custom exception types following the way [`UndefVarError`](@code-self-ref)
 is written:
 
 ```jldoctest
@@ -691,11 +691,11 @@ julia> Base.showerror(io::IO, e::MyUndefVarError) = print(io, e.var, " not defin
 
 ### Errors
 
-The [`error`](@ref) function is used to produce an [`ErrorException`](@ref) that interrupts
+The [`error`](@code-self-ref) function is used to produce an [`ErrorException`](@code-self-ref) that interrupts
 the normal flow of control.
 
 Suppose we want to stop execution immediately if the square root of a negative number is taken.
-To do this, we can define a fussy version of the [`sqrt`](@ref) function that raises an error
+To do this, we can define a fussy version of the [`sqrt`](@code-self-ref) function that raises an error
 if its argument is negative:
 
 ```jldoctest fussy_sqrt; filter = r"Stacktrace:(\n \[[0-9]+\].*)*"
@@ -816,8 +816,8 @@ end
 The power of the `try/catch` construct lies in the ability to unwind a deeply nested computation
 immediately to a much higher level in the stack of calling functions. There are situations where
 no error has occurred, but the ability to unwind the stack and pass a value to a higher level
-is desirable. Julia provides the [`rethrow`](@ref), [`backtrace`](@ref), [`catch_backtrace`](@ref)
-and [`current_exceptions`](@ref) functions for more advanced error handling.
+is desirable. Julia provides the [`rethrow`](@code-self-ref), [`backtrace`](@code-self-ref), [`catch_backtrace`](@code-self-ref)
+and [`current_exceptions`](@code-self-ref) functions for more advanced error handling.
 
 ### `finally` Clauses
 
