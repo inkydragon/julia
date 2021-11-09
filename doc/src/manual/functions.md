@@ -689,7 +689,7 @@ julia> Date(2000)
 ```
 
 Optional arguments are actually just a convenient syntax for writing multiple method definitions
-with different numbers of arguments (see [Note on Optional and keyword Arguments](@ref)).
+with different numbers of arguments (see [Note on Optional and keyword Arguments](@ref man-methods-optional-keyword)).
 This can be checked for our `Date` function example by calling `methods` function.
 
 ## Keyword Arguments
