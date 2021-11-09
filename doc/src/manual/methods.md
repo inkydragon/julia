@@ -288,7 +288,7 @@ exists, if transiently, until the more specific method is defined.
 In more complex cases, resolving method ambiguities involves a certain
 element of design; this topic is explored further [below](@ref man-method-design-ambiguities).
 
-## Parametric Methods
+## [Parametric Methods](@id man-methods-parametric)
 
 Method definitions can optionally have type parameters qualifying the signature:
 
