@@ -177,7 +177,7 @@ julia> 1 + NaN*im
 1.0 + NaN*im
 ```
 
-## Rational Numbers
+## [Rational Numbers](@id man-complex-rational-r)
 
 Julia has a rational number type to represent exact ratios of integers. Rationals are constructed
 using the [`//`](@code-self-ref) operator:

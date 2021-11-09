@@ -40,7 +40,7 @@ The following are Julia's primitive numeric types:
 | [`Float32`](@code-self-ref) | [single](https://en.wikipedia.org/wiki/Single_precision_floating-point_format) | 32             |
 | [`Float64`](@code-self-ref) | [double](https://en.wikipedia.org/wiki/Double_precision_floating-point_format) | 64             |
 
-Additionally, full support for [Complex and Rational Numbers](@ref) is built on top of these primitive
+Additionally, full support for [Complex and Rational Numbers](@ref man-complex-rational-r) is built on top of these primitive
 numeric types. All numeric types interoperate naturally without explicit casting, thanks to a
 flexible, user-extensible [type promotion system](@ref conversion-and-promotion).
 
