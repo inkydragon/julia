@@ -1,4 +1,4 @@
-# Metaprogramming
+# [Metaprogramming](@id man-meta)
 
 The strongest legacy of Lisp in the Julia language is its metaprogramming support. Like Lisp,
 Julia represents its own code as a data structure of the language itself. Since code is represented

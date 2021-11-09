@@ -76,7 +76,7 @@ table may be searched for methods accepting a given type using [`methodswith`](@
 
 ## Expansion and lowering
 
-As discussed in the [Metaprogramming](@ref) section, the [`macroexpand`](@code-self-ref) function gives
+As discussed in the [Metaprogramming](@ref man-meta) section, the [`macroexpand`](@code-self-ref) function gives
 the unquoted and interpolated expression ([`Expr`](@code-self-ref)) form for a given macro. To use `macroexpand`,
 `quote` the expression block itself (otherwise, the macro will be evaluated and the result will
 be passed instead!). For example:
