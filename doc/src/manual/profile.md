@@ -1,4 +1,4 @@
-# Profiling
+# [Profiling](@id man-profile)
 
 The `Profile` module provides tools to help developers improve the performance of their
 code. When used, it takes measurements on running code, and produces output that helps you understand

@@ -146,7 +146,7 @@ its algorithmic aspects (see [Pre-allocating outputs](@ref)).
 Julia and its package ecosystem includes tools that may help you diagnose problems and improve
 the performance of your code:
 
-  * [Profiling](@ref) allows you to measure the performance of your running code and identify lines
+  * [Profiling](@ref man-profile) allows you to measure the performance of your running code and identify lines
     that serve as bottlenecks. For complex projects, the [ProfileView](https://github.com/timholy/ProfileView.jl)
     package can help you visualize your profiling results.
   * The [Traceur](https://github.com/JunoLab/Traceur.jl) package can help you find common performance problems in your code.
