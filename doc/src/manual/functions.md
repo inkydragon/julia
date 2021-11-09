@@ -195,8 +195,9 @@ alone is a matter of coding style.
 
 In Julia, most operators are just functions with support for special syntax. (The exceptions are
 operators with special evaluation semantics like `&&` and `||`. These operators cannot be functions
-since [Short-Circuit Evaluation](@ref) requires that their operands are not evaluated before evaluation
-of the operator.) Accordingly, you can also apply them using parenthesized argument lists, just
+since [Short-Circuit Evaluation](@ref man-control-flow-short-circuit) requires that their operands are
+not evaluated before evaluation of the operator.) 
+Accordingly, you can also apply them using parenthesized argument lists, just
 as you would any other function:
 
 ```jldoctest

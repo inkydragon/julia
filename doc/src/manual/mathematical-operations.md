@@ -373,7 +373,7 @@ The middle expression is only evaluated once, rather than twice as it would be i
 were written as `v(1) < v(2) && v(2) <= v(3)`. However, the order of evaluations in a chained
 comparison is undefined. It is strongly recommended not to use expressions with side effects (such
 as printing) in chained comparisons. If side effects are required, the short-circuit `&&` operator
-should be used explicitly (see [Short-Circuit Evaluation](@ref)).
+should be used explicitly (see [Short-Circuit Evaluation](@ref man-control-flow-short-circuit)).
 
 ### Elementary Functions
 

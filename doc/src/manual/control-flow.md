@@ -4,7 +4,7 @@ Julia provides a variety of control flow constructs:
 
   * [Compound Expressions](@ref man-compound-expressions): `begin` and `;`.
   * [Conditional Evaluation](@ref man-conditional-evaluation): `if`-`elseif`-`else` and `?:` (ternary operator).
-  * [Short-Circuit Evaluation](@ref): logical operators `&&` (“and”) and `||` (“or”), and also chained comparisons.
+  * [Short-Circuit Evaluation](@ref man-control-flow-short-circuit): logical operators `&&` (“and”) and `||` (“or”), and also chained comparisons.
   * [Repeated Evaluation: Loops](@ref man-loops): `while` and `for`.
   * [Exception Handling](@ref man-control-flow-exception): `try`-`catch`, [`error`](@code-self-ref) and [`throw`](@code-self-ref).
   * [Tasks (aka Coroutines)](@ref man-tasks): [`yieldto`](@code-self-ref).
@@ -245,7 +245,7 @@ no
 "no"
 ```
 
-## Short-Circuit Evaluation
+## [Short-Circuit Evaluation](@id man-control-flow-short-circuit)
 
 The `&&` and `||` operators in Julia correspond to logical “and” and “or” operations, respectively,
 and are typically used for this purpose.  However, they have an additional property of *short-circuit*
