@@ -134,7 +134,7 @@ abstract types even though they have no instantiation because they are the backb
 system: they form the conceptual hierarchy which makes Julia's type system more than just a collection
 of object implementations.
 
-Recall that in [Integers and Floating-Point Numbers](@ref), we introduced a variety of concrete
+Recall that in [Integers and Floating-Point Numbers](@ref man-int-float), we introduced a variety of concrete
 types of numeric values: [`Int8`](@code-self-ref), [`UInt8`](@code-self-ref), [`Int16`](@code-self-ref), [`UInt16`](@code-self-ref),
 [`Int32`](@code-self-ref), [`UInt32`](@code-self-ref), [`Int64`](@code-self-ref), [`UInt64`](@code-self-ref), [`Int128`](@code-self-ref),
 [`UInt128`](@code-self-ref), [`Float16`](@code-self-ref), [`Float32`](@code-self-ref), and [`Float64`](@code-self-ref). Although

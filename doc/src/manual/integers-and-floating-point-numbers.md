@@ -1,4 +1,4 @@
-# Integers and Floating-Point Numbers
+# [Integers and Floating-Point Numbers](@id man-int-float)
 
 Integers and floating-point values are the basic building blocks of arithmetic and computation.
 Built-in representations of such values are called numeric primitives, while representations of
