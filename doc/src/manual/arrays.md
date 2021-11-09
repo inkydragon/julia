@@ -877,7 +877,7 @@ much better to iterate over [`eachindex(A)`](@code-self-ref) instead of `1:lengt
 Not only will the former be much faster in cases where `A` is `IndexCartesian`,
 but it will also support [OffsetArrays](https://github.com/JuliaArrays/OffsetArrays.jl), too.
 
-#### Omitted and extra indices
+#### [Omitted and extra indices](@id man-arrays-omit-indices)
 
 In addition to linear indexing, an `N`-dimensional array may be indexed with
 fewer or more than `N` indices in certain situations.
