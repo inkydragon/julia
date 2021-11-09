@@ -187,7 +187,7 @@ julia> [1,2,3] .^ 3
 ```
 
 More specifically, `a .^ b` is parsed as the ["dot" call](@ref man-vectorized)
-`(^).(a,b)`, which performs a [broadcast](@ref Broadcasting) operation:
+`(^).(a,b)`, which performs a [broadcast](@ref man-arrays-broadcasting) operation:
 it can combine arrays and scalars, arrays of the same size (performing
 the operation elementwise), and even arrays of different shapes (e.g.
 combining row and column vectors to produce a matrix). Moreover, like

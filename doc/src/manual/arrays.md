@@ -597,7 +597,7 @@ If any index `I_k` is itself an array, then the right hand side `X` must also be
 array with the same shape as the result of indexing `A[I_1, I_2, ..., I_n]` or a vector with
 the same number of elements. The value in location `I_1[i_1], I_2[i_2], ..., I_n[i_n]` of
 `A` is overwritten with the value `X[I_1, I_2, ..., I_n]`, converting if necessary. The
-element-wise assignment operator `.=` may be used to [broadcast](@ref Broadcasting) `X`
+element-wise assignment operator `.=` may be used to [broadcast](@ref man-arrays-broadcasting) `X`
 across the selected locations:
 
 
@@ -992,7 +992,7 @@ The following operators are supported for arrays:
 To enable convenient vectorization of mathematical and other operations,
 Julia [provides the dot syntax](@ref man-vectorized) `f.(args...)`, e.g. `sin.(x)`
 or `min.(x,y)`, for elementwise operations over arrays or mixtures of arrays and
-scalars (a [Broadcasting](@ref) operation); these have the additional advantage of
+scalars (a [Broadcasting](@ref man-arrays-broadcasting) operation); these have the additional advantage of
 "fusing" into a single loop when combined with other dot calls, e.g. `sin.(cos.(x))`.
 
 Also, *every* binary operator supports a [dot version](@ref man-dot-operators)
@@ -1007,7 +1007,7 @@ Also notice the difference between `max.(a,b)`, which [`broadcast`](@code-self-r
 elementwise over `a` and `b`, and [`maximum(a)`](@code-self-ref), which finds the largest value within
 `a`. The same relationship holds for `min.(a,b)` and `minimum(a)`.
 
-## Broadcasting
+## [Broadcasting](@id man-arrays-broadcasting)
 
 It is sometimes useful to perform element-by-element binary operations on arrays of different
 sizes, such as adding a vector to each column of a matrix. An inefficient way to do this would
