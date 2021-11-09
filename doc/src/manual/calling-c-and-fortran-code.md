@@ -1,4 +1,4 @@
-# Calling C and Fortran Code
+# [Calling C and Fortran Code](@id man-call-c)
 
 Though most code can be written in Julia, there are many high-quality, mature libraries for numerical
 computing already written in C and Fortran. To allow easy use of this existing code, Julia makes

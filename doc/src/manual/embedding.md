@@ -1,6 +1,6 @@
 # [Embedding Julia](@id man-embed)
 
-As we have seen in [Calling C and Fortran Code](@ref), Julia has a simple and efficient way to
+As we have seen in [Calling C and Fortran Code](@ref man-call-c), Julia has a simple and efficient way to
 call functions written in C. But there are situations where the opposite is needed: calling Julia
 function from C code. This can be used to integrate Julia code into a larger C/C++ project, without
 the need to rewrite everything in C/C++. Julia has a C API to make this possible. As almost all
