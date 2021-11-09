@@ -82,7 +82,7 @@ If the object being stored is a `jl_value_t`, the Julia garbage collector must b
 void jl_gc_wb(jl_value_t *parent, jl_value_t *ptr);
 ```
 
-However, the [Embedding Julia](@ref) section of the manual is also required reading at this point,
+However, the [Embedding Julia](@ref man-embed) section of the manual is also required reading at this point,
 for covering other details of boxing and unboxing various types, and understanding the gc interactions.
 
 Mirror structs for some of the built-in types are [defined in `julia.h`](https://github.com/JuliaLang/julia/blob/master/src/julia.h).
