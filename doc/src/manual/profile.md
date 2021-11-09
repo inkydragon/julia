@@ -295,7 +295,7 @@ Of course, you can decrease the delay as well as increase it; however, the overh
 grows once the delay becomes similar to the amount of time needed to take a backtrace (~30 microseconds
 on the author's laptop).
 
-## Memory allocation analysis
+## [Memory allocation analysis](@id man-profile-mem)
 
 One of the most common techniques to improve performance is to reduce memory allocation. The
 total amount of allocation can be measured with [`@time`](@code-self-ref) and [`@allocated`](@code-self-ref), and
