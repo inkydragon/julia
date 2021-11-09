@@ -386,7 +386,7 @@ Moreover, these functions (like any Julia function) can be applied in "vectorize
 arrays and other collections with the [dot syntax](@ref man-vectorized) `f.(A)`,
 e.g. `sin.(A)` will compute the sine of each element of an array `A`.
 
-## Operator Precedence and Associativity
+## [Operator Precedence and Associativity](@id man-math-ops-precedence)
 
 Julia applies the following order and associativity of operations, from highest precedence to lowest:
 
