@@ -274,7 +274,7 @@ be thrown immediately.
 
 ## Parametric Constructors
 
-Parametric types add a few wrinkles to the constructor story. Recall from [Parametric Types](@ref)
+Parametric types add a few wrinkles to the constructor story. Recall from [Parametric Types](@ref man-types-parametric)
 that, by default, instances of parametric composite types can be constructed either with explicitly
 given type parameters or with type parameters implied by the types of the arguments given to the
 constructor. Here are some examples:

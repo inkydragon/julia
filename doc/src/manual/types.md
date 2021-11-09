@@ -407,7 +407,7 @@ true
 ```
 
 There is much more to say about how instances of composite types are created, but that discussion
-depends on both [Parametric Types](@ref) and on [Methods](@ref), and is sufficiently important
+depends on both [Parametric Types](@ref man-types-parametric) and on [Methods](@ref), and is sufficiently important
 to be addressed in its own section: [Constructors](@ref man-constructors).
 
 ## Mutable Composite Types
@@ -517,7 +517,7 @@ types in other languages. Declaring a function argument or a field as `Union{T, 
 setting it either to a value of type `T`, or to `nothing` to indicate that there is no value.
 See [this FAQ entry](@ref faq-nothing) for more information.
 
-## Parametric Types
+## [Parametric Types](@id man-types-parametric)
 
 An important and powerful feature of Julia's type system is that it is parametric: types can take
 parameters, so that type declarations actually introduce a whole family of new types -- one for

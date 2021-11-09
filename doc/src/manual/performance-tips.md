@@ -200,7 +200,7 @@ If you cannot avoid containers with abstract value types, it is sometimes better
 parametrize with `Any` to avoid runtime type checking. E.g. `IdDict{Any, Any}` performs
 better than `IdDict{Type, Vector}`
 
-See also the discussion under [Parametric Types](@ref).
+See also the discussion under [Parametric Types](@ref man-types-parametric).
 
 ## Type declarations
 
