@@ -326,7 +326,7 @@ false
 ```
 
 Such definitions correspond to methods whose type signatures are `UnionAll` types
-(see [UnionAll Types](@ref)).
+(see [UnionAll Types](@ref man-types-union)).
 
 This kind of definition of function behavior by dispatch is quite common -- idiomatic, even --
 in Julia. Method type parameters are not restricted to being used as the types of arguments:
@@ -418,7 +418,7 @@ The `same_type_numeric` function behaves much like the `same_type` function defi
 is only defined for pairs of numbers.
 
 Parametric methods allow the same syntax as `where` expressions used to write types
-(see [UnionAll Types](@ref)).
+(see [UnionAll Types](@ref man-types-union)).
 If there is only a single parameter, the enclosing curly braces (in `where {T}`) can be omitted,
 but are often preferred for clarity.
 Multiple parameters can be separated with commas, e.g. `where {T, S<:Real}`, or written using

@@ -641,7 +641,7 @@ end
 ```
 
 (Equivalently, one could define `function norm(p::Point{T} where T<:Real)` or
-`function norm(p::Point{T}) where T<:Real`; see [UnionAll Types](@ref).)
+`function norm(p::Point{T}) where T<:Real`; see [UnionAll Types](@ref man-types-union).)
 
 More examples will be discussed later in [Methods](@ref).
 
@@ -741,7 +741,7 @@ false
 
 The notation `Pointy{<:Real}` can be used to express the Julia analogue of a
 *covariant* type, while `Pointy{>:Int}` the analogue of a *contravariant* type,
-but technically these represent *sets* of types (see [UnionAll Types](@ref)).
+but technically these represent *sets* of types (see [UnionAll Types](@ref man-types-union)).
 ```jldoctest pointytype
 julia> Pointy{Float64} <: Pointy{<:Real}
 true
@@ -990,7 +990,7 @@ julia> Ptr{Int64} <: Ptr
 true
 ```
 
-## UnionAll Types
+## [UnionAll Types](@id man-types-union)
 
 We have said that a parametric type like `Ptr` acts as a supertype of all its instances
 (`Ptr{Int64}` etc.). How does this work? `Ptr` itself cannot be a normal data type, since without
