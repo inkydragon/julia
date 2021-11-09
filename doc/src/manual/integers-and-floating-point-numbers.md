@@ -368,7 +368,7 @@ julia> bitstring(-0.0)
 "1000000000000000000000000000000000000000000000000000000000000000"
 ```
 
-### Special floating-point values
+### [Special floating-point values](@id man-int-float-special-val)
 
 There are three specified standard floating-point values that do not correspond to any point on
 the real number line:

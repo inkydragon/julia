@@ -167,7 +167,7 @@ julia> a = 1; b = 2; complex(a, b)
 This construction avoids the multiplication and addition operations.
 
 [`Inf`](@code-self-ref) and [`NaN`](@code-self-ref) propagate through complex numbers in the real and imaginary parts
-of a complex number as described in the [Special floating-point values](@ref) section:
+of a complex number as described in the [Special floating-point values](@ref man-int-float-special-val) section:
 
 ```jldoctest
 julia> 1 + Inf*im
