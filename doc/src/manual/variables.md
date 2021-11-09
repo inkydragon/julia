@@ -160,4 +160,4 @@ conventions:
     "mutating" or "in-place" functions because they are intended to produce changes in their arguments
     after the function is called, not just return a value.
 
-For more information about stylistic conventions, see the [Style Guide](@ref).
+For more information about stylistic conventions, see the [Style Guide](@ref man-style).

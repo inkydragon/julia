@@ -1,4 +1,4 @@
-# Style Guide
+# [Style Guide](@id man-style)
 
 The following sections explain a few aspects of idiomatic Julia coding style. None of these rules
 are absolute; they are only suggestions to help familiarize you with the language and to help
