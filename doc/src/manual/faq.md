@@ -795,7 +795,7 @@ use `import`, then you'll replace the other module's implementation of `bar(s::A
 with your new implementation, which could easily do something completely different (and break
 all/many future usages of the other functions in module Foo that depend on calling bar).
 
-## Nothingness and missing values
+## [Nothingness and missing values](@id man-faq-nothing-missing)
 
 ### [How does "null", "nothingness" or "missingness" work in Julia?](@id faq-nothing)
 
