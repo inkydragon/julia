@@ -52,7 +52,7 @@ Julia's type system is designed to be powerful and expressive, yet clear, intuit
 Many Julia programmers may never feel the need to write code that explicitly uses types. Some
 kinds of programming, however, become clearer, simpler, faster and more robust with declared types.
 
-## Type Declarations
+## [Type Declarations](@id man-types-decl)
 
 The `::` operator can be used to attach type annotations to expressions and variables in programs.
 There are two primary reasons to do this:

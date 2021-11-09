@@ -65,7 +65,7 @@ Python, Ruby and Perl, among other dynamic languages.
 
 ## Argument-type declarations
 
-You can declare the types of function arguments by appending `::TypeName` to the argument name, as usual for [Type Declarations](@ref) in Julia.
+You can declare the types of function arguments by appending `::TypeName` to the argument name, as usual for [Type Declarations](@ref man-types-decl) in Julia.
 For example, the following function computes [Fibonacci numbers](https://en.wikipedia.org/wiki/Fibonacci_number) recursively:
 ```
 fib(n::Integer) = n ≤ 2 ? one(n) : fib(n-1) + fib(n-2)
@@ -161,7 +161,7 @@ Int8
 ```
 
 This function will always return an `Int8` regardless of the types of `x` and `y`.
-See [Type Declarations](@ref) for more on return types.
+See [Type Declarations](@ref man-types-decl) for more on return types.
 
 Return type declarations are **rarely used** in Julia: in general, you should
 instead write "type-stable" functions in which Julia's compiler can automatically
