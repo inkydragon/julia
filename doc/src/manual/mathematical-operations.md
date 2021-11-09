@@ -213,7 +213,7 @@ For example, it is not clear whether `1.+x` means `1. + x` or `1 .+ x`.
 Therefore this syntax is disallowed, and spaces must be used around
 the operator in such cases.
 
-## Numeric Comparisons
+## [Numeric Comparisons](@id man-math-ops-comparison)
 
 Standard comparison operations are defined for all the primitive numeric types:
 

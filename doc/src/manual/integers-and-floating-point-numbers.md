@@ -381,7 +381,8 @@ the real number line:
 
 
 For further discussion of how these non-finite floating-point values are ordered with respect
-to each other and other floats, see [Numeric Comparisons](@ref). By the [IEEE 754 standard](https://en.wikipedia.org/wiki/IEEE_754-2008),
+to each other and other floats, see [Numeric Comparisons](@ref man-math-ops-comparison).
+By the [IEEE 754 standard](https://en.wikipedia.org/wiki/IEEE_754-2008),
 these floating-point values are the results of certain arithmetic operations:
 
 ```jldoctest
@@ -757,7 +758,7 @@ type of a given variable.
 | [`zero(x)`](@code-self-ref) | Literal zero of type `x` or type of variable `x` |
 | [`one(x)`](@code-self-ref)  | Literal one of type `x` or type of variable `x`  |
 
-These functions are useful in [Numeric Comparisons](@ref) to avoid overhead from unnecessary
+These functions are useful in [Numeric Comparisons](@ref man-math-ops-comparison) to avoid overhead from unnecessary
 [type conversion](@ref conversion-and-promotion).
 
 Examples:
