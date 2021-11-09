@@ -6,7 +6,7 @@ Julia provides a variety of control flow constructs:
   * [Conditional Evaluation](@ref man-conditional-evaluation): `if`-`elseif`-`else` and `?:` (ternary operator).
   * [Short-Circuit Evaluation](@ref): logical operators `&&` (“and”) and `||` (“or”), and also chained comparisons.
   * [Repeated Evaluation: Loops](@ref man-loops): `while` and `for`.
-  * [Exception Handling](@ref): `try`-`catch`, [`error`](@code-self-ref) and [`throw`](@code-self-ref).
+  * [Exception Handling](@ref man-control-flow-exception): `try`-`catch`, [`error`](@code-self-ref) and [`throw`](@code-self-ref).
   * [Tasks (aka Coroutines)](@ref man-tasks): [`yieldto`](@code-self-ref).
 
 The first five control flow mechanisms are standard to high-level programming languages. [`Task`](@code-self-ref)s
@@ -569,7 +569,7 @@ Using [`zip`](@code-self-ref) will create an iterator that is a tuple containing
 The `zip` iterator will iterate over all subiterators in order, choosing the ``i``th element of each subiterator in the
 ``i``th iteration of the `for` loop. Once any of the subiterators run out, the `for` loop will stop.
 
-## Exception Handling
+## [Exception Handling](@id man-control-flow-exception)
 
 When an unexpected condition occurs, a function may be unable to return a reasonable value to
 its caller. In such cases, it may be best for the exceptional condition to either terminate the
