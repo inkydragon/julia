@@ -11,7 +11,7 @@ code in Julia are represented by Julia data structures, powerful [reflection](ht
 capabilities are available to explore the internals of a program and its types just like any other
 data.
 
-## Program representation
+## [Program representation](@id man-meta-prog-represent)
 
 Every Julia program starts life as a string:
 

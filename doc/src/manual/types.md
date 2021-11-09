@@ -1437,7 +1437,7 @@ As a rule of thumb, the single-line `show` method should print a valid Julia exp
 the shown object.  When this `show` method contains infix operators, such as the multiplication
 operator (`*`) in our single-line `show` method for `Polar` above, it may not parse correctly when
 printed as part of another object.  To see this, consider the expression object
-(see [Program representation](@ref)) which takes the square of a specific instance of our `Polar` type:
+(see [Program representation](@ref man-meta-prog-represent)) which takes the square of a specific instance of our `Polar` type:
 
 ```jldoctest polartype
 julia> a = Polar(3, 4.0)
