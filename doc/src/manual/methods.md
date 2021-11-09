@@ -780,7 +780,7 @@ matmul(a::T, b::T) = ...
 matmul(a, b) = matmul(promote(a, b)...)
 ```
 
-## Parametrically-constrained Varargs methods
+## [Parametrically-constrained Varargs methods](@id man-methods-varargs)
 
 Function parameters can also be used to constrain the number of arguments that may be supplied
 to a "varargs" function ([Varargs Functions](@ref man-func-varargs)).
