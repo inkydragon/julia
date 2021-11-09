@@ -515,7 +515,7 @@ c = (b + 1.0f0)::Complex{T}
 does not hinder performance (but does not help either) since the compiler can determine the type of `c`
 at the time `k` is compiled.
 
-### Be aware of when Julia avoids specializing
+### [Be aware of when Julia avoids specializing](@id man-performance-tips-specializing)
 
 As a heuristic, Julia avoids automatically specializing on argument type parameters in three
 specific cases: `Type`, `Function`, and `Vararg`. Julia will always specialize when the argument is
