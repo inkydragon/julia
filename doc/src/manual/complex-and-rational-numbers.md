@@ -1,7 +1,7 @@
 # Complex and Rational Numbers
 
 Julia includes predefined types for both complex and rational numbers, and supports
-all the standard [Mathematical Operations and Elementary Functions](@ref) on them. [Conversion and Promotion](@ref conversion-and-promotion) are defined
+all the standard [Mathematical Operations and Elementary Functions](@ref man-math-ops) on them. [Conversion and Promotion](@ref conversion-and-promotion) are defined
 so that operations on any combination of predefined numeric types, whether primitive or composite,
 behave as expected.
 

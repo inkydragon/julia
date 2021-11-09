@@ -345,7 +345,7 @@ Stacktrace:
 ```
 
 Boolean operations *without* short-circuit evaluation can be done with the bitwise boolean operators
-introduced in [Mathematical Operations and Elementary Functions](@ref): `&` and `|`. These are
+introduced in [Mathematical Operations and Elementary Functions](@ref man-math-ops): `&` and `|`. These are
 normal functions, which happen to support infix operator syntax, but always evaluate their arguments:
 
 ```jldoctest tandf
