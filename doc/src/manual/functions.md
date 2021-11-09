@@ -80,7 +80,7 @@ Argument-type declarations **normally have no impact on performance**: regardles
 
 However, it is a **common mistake to overly restrict the argument types**, which can unnecessarily limit the applicability of the function and prevent it from being re-used in circumstances you did not anticipate.    For example, the `fib(n::Integer)` function above works equally well for `Int` arguments (machine integers) and `BigInt` arbitrary-precision integers (see [BigFloats and BigInts](@ref)), which is especially useful because Fibonacci numbers grow exponentially rapidly and will quickly overflow any fixed-precision type like `Int` (see [Overflow behavior](@ref)).  If we had declared our function as `fib(n::Int)`, however, the application to `BigInt` would have been prevented for no reason.   In general, you should use the most general applicable abstract types for arguments, and **when in doubt, omit the argument types**.  You can always add argument-type specifications later if they become necessary, and you don't sacrifice performance or functionality by omitting them.
 
-## The `return` Keyword
+## [The `return` Keyword](@id man-func-return)
 
 The value returned by a function is the value of the last expression evaluated, which, by default,
 is the last expression in the body of the function definition. In the example function, `f`, from
