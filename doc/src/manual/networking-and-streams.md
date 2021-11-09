@@ -1,4 +1,4 @@
-# Networking and Streams
+# [Networking and Streams](@id man-net-streams)
 
 Julia provides a rich interface to deal with streaming I/O objects such as terminals, pipes and
 TCP sockets. This interface, though asynchronous at the system level, is presented in a synchronous
