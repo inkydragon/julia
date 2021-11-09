@@ -350,7 +350,7 @@ julia> !isconcretetype(Array), !isabstracttype(Array), isstructtype(Array), !isc
 ```
 In this case, it would be better to avoid declaring `MyType` with a field `a::Array` and instead declare the field as `a::Array{T,N}` or as `a::A`, where `{T,N}` or `A` are parameters of `MyType`.
 
-### Avoid fields with abstract containers
+### [Avoid fields with abstract containers](@id man-performance-tips-abstract-containers)
 
 The same best practices also work for container types:
 

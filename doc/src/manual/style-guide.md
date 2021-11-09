@@ -277,7 +277,7 @@ with [`typeof(x)`](@code-self-ref) if convenient. There is no performance differ
 not a general caution against static parameters, just against uses where they are not needed.
 
 Note also that container types, specifically may need type parameters in function calls. See the
-FAQ [Avoid fields with abstract containers](@ref) for more information.
+FAQ [Avoid fields with abstract containers](@ref man-performance-tips-abstract-containers) for more information.
 
 ## Avoid confusion about whether something is an instance or a type
 
