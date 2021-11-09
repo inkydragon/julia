@@ -858,7 +858,7 @@ end
 Here, [`open`](@code-self-ref) first opens the file for writing and then passes the resulting output stream
 to the anonymous function you defined in the `do ... end` block. After your function exits, [`open`](@code-self-ref)
 will make sure that the stream is properly closed, regardless of whether your function exited
-normally or threw an exception. (The `try/finally` construct will be described in [Control Flow](@ref).)
+normally or threw an exception. (The `try/finally` construct will be described in [Control Flow](@ref man-control-flow).)
 
 With the `do` block syntax, it helps to check the documentation or implementation to know how
 the arguments of the user function are initialized.
