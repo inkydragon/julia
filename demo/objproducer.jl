@@ -8,7 +8,7 @@ Usage:
     compile object files:
         ./usr/bin/julia -t 1 -O 2 --image-codegen -- demo/objproducer.jl 1 
     load object files:
-        ./usr/bin/julia demo/objproducer.jl 0 -t 1 -O 2 --image-codegen 
+        ./usr/bin/julia -t 1 -O 2 --image-codegen -- demo/objproducer.jl 0 
     outputdir is set to `demo/objs` 
     You may see long output on your computer.
 """)
