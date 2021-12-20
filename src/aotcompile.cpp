@@ -596,14 +596,14 @@ void jl_dump_native_impl(void *native_code,
 }
 
 
-void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
+extern void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 {
     PM->add(new TargetLibraryInfoWrapperPass(Triple(TM->getTargetTriple())));
     PM->add(createTargetTransformInfoWrapperPass(TM->getTargetIRAnalysis()));
 }
 
 
-void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM)
+extern void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 {
     // TODO: don't do this on CPUs that natively support Float16
     PM->add(createDemoteFloat16Pass());
@@ -614,7 +614,7 @@ void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM)
 
 // this defines the set of optimization passes defined for Julia at various optimization levels.
 // it assumes that the TLI and TTI wrapper passes have already been added.
-void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
+extern void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
                            bool lower_intrinsics, bool dump_native)
 {
     // Note: LLVM 12 disabled the hoisting of common instruction

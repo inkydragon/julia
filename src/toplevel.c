@@ -859,6 +859,13 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops, &has_opaque, &has_compile);
 
     jl_value_t *result;
+    // use interpreter everywhere
+    // jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
+    if (jl_options.image_codegen==1){
+        result = jl_interpret_toplevel_thunk(m, thk);
+        JL_GC_POP();
+        return result;
+    }
     if (has_intrinsics || (!has_defs && fast && has_loops &&
                            jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
                            jl_options.compile_enabled != JL_OPTIONS_COMPILE_MIN &&

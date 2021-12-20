@@ -88,7 +88,7 @@ julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-sysimg-ji julia
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
 
 julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink julia-libccalltest julia-libllvmcalltest julia-base-cache
-
+julia-noimage-release julia-noimage-debug: julia-noimage-% : julia-src-% julia-symlink julia-libccalltest julia-libllvmcalltest
 debug release : % : julia-%
 
 docs: julia-sysimg-$(JULIA_BUILD_MODE)
@@ -515,7 +515,7 @@ distcleanall: cleanall
 	@-$(MAKE) -C $(BUILDROOT)/deps distcleanall
 	@-$(MAKE) -C $(BUILDROOT)/doc cleanall
 
-.PHONY: default debug release check-whitespace release-candidate \
+.PHONY: default debug release check-whitespace release-candidate julia-noimage \
 	julia-debug julia-release julia-stdlib julia-deps julia-deps-libs \
 	julia-cli-release julia-cli-debug julia-src-release julia-src-debug \
 	julia-symlink julia-base julia-sysimg julia-sysimg-ji julia-sysimg-release julia-sysimg-debug \

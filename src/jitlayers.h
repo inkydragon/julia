@@ -13,7 +13,7 @@
 
 #include <llvm/Target/TargetMachine.h>
 #include "julia_assert.h"
-
+#include <sstream> 
 using namespace llvm;
 
 extern "C" jl_cgparams_t jl_default_cgparams;
@@ -129,11 +129,15 @@ static inline Constant *literal_static_pointer_val(const void *p, Type *T)
 #endif
 }
 
-static const inline char *name_from_method_instance(jl_method_instance_t *li)
-{
-    return jl_is_method(li->def.method) ? jl_symbol_name(li->def.method->name) : "top-level scope";
+extern "C" const char *jl_name_from_method_instance(jl_method_instance_t *li);
+static inline const char *name_from_method_instance(jl_method_instance_t *li){
+    if (jl_options.image_codegen==1){
+        return jl_name_from_method_instance(li);
+    }
+    else{
+        return jl_is_method(li->def.method) ? jl_symbol_name(li->def.method->name) : "top-level scope";
+    }
 }
-
 
 void jl_init_jit(void);
 
@@ -198,7 +202,7 @@ public:
     const DataLayout& getDataLayout() const;
     const Triple& getTargetTriple() const;
     size_t getTotalBytes() const;
-private:
+public:
     std::string getMangledName(StringRef Name);
     std::string getMangledName(const GlobalValue *GV);
 

@@ -51,12 +51,18 @@ void jl_dump_llvm_opt(void *s)
 static void jl_add_to_ee(std::unique_ptr<Module> m);
 static void jl_add_to_ee(std::unique_ptr<Module> &M, StringMap<std::unique_ptr<Module>*> &NewExports);
 static uint64_t getAddressForFunction(StringRef fname);
-
+std::set<std::string> emitted_const;
 void jl_link_global(GlobalVariable *GV, void *addr)
 {
     Constant *P = literal_static_pointer_val(addr, GV->getValueType());
     GV->setInitializer(P);
     if (jl_options.image_codegen) {
+        llvm::StringRef ref = GV->getName();
+        std::string s(ref);
+        bool is_in = emitted_const.find(s) != emitted_const.end();
+        if (!is_in){
+            emitted_const.insert(s);   
+        };
         // If we are forcing imaging mode codegen for debugging,
         // emit external non-const symbol to avoid LLVM optimizing the code
         // similar to non-imaging mode.

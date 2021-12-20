@@ -130,6 +130,9 @@ $(build_shlibdir)/libjulia.$(SHLIB_EXT) $(build_shlibdir)/libjulia-debug.$(SHLIB
 	@$(call PRINT_LINK, ln -sf $(notdir $<) $@)
 endif
 
+$(build_bindir)/new-julia$(EXE): $(EXE_OBJS) $(build_shlibdir)/libjulia.$(SHLIB_EXT) | $(build_bindir)
+	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(SHIPFLAGS) $(EXE_OBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia)
+
 $(build_bindir)/julia$(EXE): $(EXE_OBJS) $(build_shlibdir)/libjulia.$(SHLIB_EXT) | $(build_bindir)
 	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(SHIPFLAGS) $(EXE_OBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia)
 

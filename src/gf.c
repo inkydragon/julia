@@ -1936,13 +1936,47 @@ jl_code_instance_t *jl_compile_method_internal(jl_method_instance_t *mi, size_t 
     int compile_option = jl_options.compile_enabled;
     jl_method_t *def = mi->def.method;
     // disabling compilation per-module can override global setting
+    if (jl_options.image_codegen==1){
+        // jl_code_info_t *src = jl_code_for_interpreter(mi);
+        // copy fptr from the template method definition
+        jl_method_t *def = mi->def.method;
+        if (jl_is_method(def) && def->unspecialized) {
+            jl_code_instance_t *unspec = jl_atomic_load_relaxed(&def->unspecialized->cache);
+            if (unspec && jl_atomic_load_relaxed(&unspec->invoke)) {
+                jl_code_instance_t *codeinst = jl_new_codeinst(mi,
+                    (jl_value_t*)jl_any_type, NULL, NULL,
+                    0, 1, ~(size_t)0);
+                codeinst->isspecsig = 0;
+                codeinst->specptr = unspec->specptr;
+                codeinst->rettype_const = unspec->rettype_const;
+                codeinst->invoke = unspec->invoke;
+                jl_mi_cache_insert(mi, codeinst);
+                return codeinst;
+            }
+        }
+        jl_code_info_t *src = jl_code_for_interpreter(mi);
+        // always use interpreter here!
+        if (1) {
+            jl_code_instance_t *codeinst = jl_new_codeinst(mi,
+                (jl_value_t*)jl_any_type, NULL, NULL,
+                0, 1, ~(size_t)0);
+            codeinst->invoke = jl_fptr_interpret_call;
+            jl_mi_cache_insert(mi, codeinst);
+            return codeinst;
+        }
+        if (compile_option == JL_OPTIONS_COMPILE_OFF) {
+            jl_printf(JL_STDERR, "code missing for ");
+            jl_static_show(JL_STDERR, (jl_value_t*)mi);
+            jl_printf(JL_STDERR, " : sysimg may not have been built with --compile=all\n");
+        }
+        jl_error("Shouldn't be here");
+    };
     if (jl_is_method(def)) {
         int mod_setting = jl_get_module_compile(((jl_method_t*)def)->module);
         if (mod_setting == JL_OPTIONS_COMPILE_OFF ||
             mod_setting == JL_OPTIONS_COMPILE_MIN)
             compile_option = ((jl_method_t*)def)->module->compile;
     }
-
     if (compile_option == JL_OPTIONS_COMPILE_OFF ||
         compile_option == JL_OPTIONS_COMPILE_MIN) {
         // copy fptr from the template method definition
