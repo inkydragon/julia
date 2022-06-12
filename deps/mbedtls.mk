@@ -47,7 +47,7 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
-ifeq ($(OS),WINNT)
+ifeq ($(BUILD_OS),WINNT)
 define MBEDTLS_INSTALL
 	mkdir -p $2/$$(build_shlibdir)
 	cp $1/library/libmbedcrypto.$$(SHLIB_EXT) $2/$$(build_shlibdir)
