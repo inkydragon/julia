@@ -25,9 +25,14 @@ ifeq ($(BUILD_OS),WINNT)
 LIBGIT2_OPTS += -G"MSYS Makefiles"
 else
 LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DDLLTOOL=`which $(CROSS_COMPILE)dlltool`
-LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
-endif
-endif
+LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
+ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST)/sys-root/mingw/
+else
+LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DLIBSSH2_INCLUDE_DIR=$(build_includedir)
+endif # CYGWIN
+endif # BUILD_OS == WINNT
+endif # OS == WINNT
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
 LIBGIT2_OPTS += -DUSE_HTTPS="mbedTLS" -DUSE_SHA1="CollisionDetection" -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
