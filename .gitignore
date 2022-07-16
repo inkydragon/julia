@@ -28,6 +28,9 @@
 *.jl.mem
 *.jl.*.mem
 *.ji
+# coverage
+*.gcno
+*.gcda
 
 /perf*
 .DS_Store
