@@ -484,9 +484,6 @@ ifneq ($(OS), WINNT)
 JCXXFLAGS += -pedantic
 endif
 DEBUGFLAGS := -O0 -ggdb2 -DJL_DEBUG_BUILD -fstack-protector
-ifneq ($(TRACKING_COVERAGE), 0)
-DEBUGFLAGS += -ftest-coverage -fprofile-arcs
-endif
 SHIPFLAGS := -O3 -ggdb2 -falign-functions
 endif
 
@@ -508,6 +505,10 @@ export MACOSX_DEPLOYMENT_TARGET=$(MACOSX_VERSION_MIN)
 JCPPFLAGS += -D_LARGEFILE_SOURCE -D_DARWIN_USE_64_BIT_INODE=1
 endif
 endif
+
+ifneq ($(TRACKING_COVERAGE), 0)
+DEBUGFLAGS += --coverage
+endif # TRACKING_COVERAGE != 0
 
 JLDFLAGS :=
 
