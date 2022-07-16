@@ -18,6 +18,7 @@ pwd
 
 # clean
 make clean
+rm -rf julia-lcov/
 
 # copy `Make.user.gcov` to `julia/Make.user`
 cp contrib/gcov/Make.user.gcov Make.user
@@ -31,8 +32,6 @@ make -j `nproc`  debug
 
 ```sh
 # in root dir: `julia`
-rm -rf julia-lcov/
-make clean-gcov
 
 mkdir julia-lcov/
 lcov --no-external --capture --rc lcov_branch_coverage=1    --directory src/ --directory cli/ --output-file julia-lcov/julia_build.info
