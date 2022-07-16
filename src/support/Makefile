@@ -79,3 +79,7 @@ clean:
 	rm -f $(BUILDDIR)/libsupport.a
 	rm -f $(BUILDDIR)/libsupport-debug.a
 	rm -f $(BUILDDIR)/host/*
+ifneq ($(TRACKING_COVERAGE), 0)
+	rm -f $(BUILDDIR)/*.gcno
+	rm -f $(BUILDDIR)/*.gcda
+endif

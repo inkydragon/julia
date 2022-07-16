@@ -133,5 +133,9 @@ clean:
 	rm -f $(BUILDDIR)/$(EXENAME)$(EXE)
 	rm -f $(BUILDDIR)/$(EXENAME)-debug$(EXE)
 	rm -f $(BUILDDIR)/host/*
+ifneq ($(TRACKING_COVERAGE), 0)
+	rm -f $(BUILDDIR)/*.gcno
+	rm -f $(BUILDDIR)/*.gcda
+endif
 
 .PHONY: flisp-deps

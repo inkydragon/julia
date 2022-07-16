@@ -422,6 +422,9 @@ clean:
 	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc $(BUILDDIR)/jl_internal_funcs.inc
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a $(BUILDDIR)/*.h.gen
 	-rm -f $(BUILDDIR)/julia_version.h
+ifneq ($(TRACKING_COVERAGE), 0)
+	-rm -f $(BUILDDIR)/*.gcno $(BUILDDIR)/*.gcda
+endif
 
 clean-flisp:
 	-$(MAKE) -C $(SRCDIR)/flisp clean BUILDDIR='$(abspath $(BUILDDIR)/flisp)'

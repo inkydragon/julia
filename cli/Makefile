@@ -147,5 +147,9 @@ $(build_bindir)/julia-debug$(EXE): $(EXE_DOBJS) $(build_shlibdir)/libjulia-debug
 clean: | $(CLEAN_TARGETS)
 	rm -f $(BUILDDIR)/*.o $(BUILDDIR)/*.dbg.obj
 	rm -f $(build_bindir)/julia*
+ifneq ($(TRACKING_COVERAGE), 0)
+	rm -f $(BUILDDIR)/*.gcno
+	rm -f $(BUILDDIR)/*.gcda
+endif
 
 .PHONY: clean release debug julia-release julia-debug
