@@ -24,9 +24,10 @@ FORCE_ASSERTIONS ?= 0
 # Set BOOTSTRAP_DEBUG_LEVEL to 1 to enable Julia-level stacktrace during bootstrapping.
 BOOTSTRAP_DEBUG_LEVEL ?= 0
 
-# Tracking test coverage for the C and C++ files
-# You may use intree build
-# This flag ONLY works with `gcc` toolchain and `debug` version
+# Tracking code coverage for C and C++ files (in `src/` and `cli/`)
+# You need:
+#   1. echo 'TRACKING_COVERAGE := 1' > Make.user
+#   2. in-tree build + debug version:   make -j  debug
 TRACKING_COVERAGE ?= 0
 
 # OPENBLAS build options

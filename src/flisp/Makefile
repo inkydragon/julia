@@ -126,16 +126,16 @@ endif
 test:
 	$(call spawn,./$(EXENAME)$(EXE)) unittest.lsp
 
-clean:
+clean-gcov:
+	-rm -f $(BUILDDIR)/*.gcno
+	-rm -f $(BUILDDIR)/*.gcda
+
+clean: clean-gcov
 	rm -f $(BUILDDIR)/*.o
 	rm -f $(BUILDDIR)/*.dbg.obj
 	rm -f $(BUILDDIR)/*.a
 	rm -f $(BUILDDIR)/$(EXENAME)$(EXE)
 	rm -f $(BUILDDIR)/$(EXENAME)-debug$(EXE)
 	rm -f $(BUILDDIR)/host/*
-ifneq ($(TRACKING_COVERAGE), 0)
-	rm -f $(BUILDDIR)/*.gcno
-	rm -f $(BUILDDIR)/*.gcda
-endif
 
-.PHONY: flisp-deps
+.PHONY: flisp-deps clean-gcov clean

@@ -575,7 +575,11 @@ full-source-dist: light-source-dist.tmp
 	tar -cz --no-recursion -T full-source-dist.tmp1 -f julia-$(JULIA_VERSION)_$(JULIA_COMMIT)-full.tar.gz
 	rm julia-${JULIA_COMMIT}
 
-clean: | $(CLEAN_TARGETS)
+clean-gcov:
+	@-$(MAKE) -C $(BUILDROOT)/src clean-gcov
+	@-$(MAKE) -C $(BUILDROOT)/cli clean-gcov
+
+clean: | $(CLEAN_TARGETS) clean-gcov
 	@-$(MAKE) -C $(BUILDROOT)/base clean
 	@-$(MAKE) -C $(BUILDROOT)/doc clean
 	@-$(MAKE) -C $(BUILDROOT)/src clean

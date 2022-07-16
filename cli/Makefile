@@ -144,12 +144,12 @@ $(build_bindir)/julia$(EXE): $(EXE_OBJS) $(build_shlibdir)/libjulia.$(SHLIB_EXT)
 $(build_bindir)/julia-debug$(EXE): $(EXE_DOBJS) $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT) | $(build_bindir)
 	@$(call PRINT_LINK, $(CC) $(LOADER_CFLAGS) $(DEBUGFLAGS) $(EXE_DOBJS) -o $@ $(LOADER_LDFLAGS) $(RPATH) -ljulia-debug)
 
-clean: | $(CLEAN_TARGETS)
+clean-gcov:
+	-rm -f $(BUILDDIR)/*.gcno
+	-rm -f $(BUILDDIR)/*.gcda
+
+clean: | $(CLEAN_TARGETS) clean-gcov
 	rm -f $(BUILDDIR)/*.o $(BUILDDIR)/*.dbg.obj
 	rm -f $(build_bindir)/julia*
-ifneq ($(TRACKING_COVERAGE), 0)
-	rm -f $(BUILDDIR)/*.gcno
-	rm -f $(BUILDDIR)/*.gcda
-endif
 
-.PHONY: clean release debug julia-release julia-debug
+.PHONY: clean-gcov clean release debug julia-release julia-debug

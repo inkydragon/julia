@@ -417,14 +417,17 @@ libjulia-codegen-release: $(build_shlibdir)/libjulia-codegen.$(JL_MAJOR_MINOR_SH
 libjulia-codegen-debug: $(build_shlibdir)/libjulia-codegen-debug.$(JL_MAJOR_MINOR_SHLIB_EXT)
 libjulia-codegen-debug libjulia-codegen-release: $(PUBLIC_HEADER_TARGETS)
 
-clean:
+clean-gcov:
+	-$(MAKE) -C $(SRCDIR)/flisp   clean-gcov
+	-$(MAKE) -C $(SRCDIR)/support clean-gcov
+	-rm -f $(BUILDDIR)/*.gcno
+	-rm -f $(BUILDDIR)/*.gcda
+
+clean: clean-gcov
 	-rm -fr $(build_shlibdir)/libjulia-internal* $(build_shlibdir)/libjulia-codegen* $(build_shlibdir)/libccalltest* $(build_shlibdir)/libllvmcalltest*
 	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc $(BUILDDIR)/jl_internal_funcs.inc
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o $(BUILDDIR)/*.dwo $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a $(BUILDDIR)/*.h.gen
 	-rm -f $(BUILDDIR)/julia_version.h
-ifneq ($(TRACKING_COVERAGE), 0)
-	-rm -f $(BUILDDIR)/*.gcno $(BUILDDIR)/*.gcda
-endif
 
 clean-flisp:
 	-$(MAKE) -C $(SRCDIR)/flisp clean BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
