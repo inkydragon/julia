@@ -24,6 +24,11 @@ FORCE_ASSERTIONS ?= 0
 # Set BOOTSTRAP_DEBUG_LEVEL to 1 to enable Julia-level stacktrace during bootstrapping.
 BOOTSTRAP_DEBUG_LEVEL ?= 0
 
+# Tracking test coverage for the C and C++ files
+# You may use intree build
+# This flag ONLY works with `gcc` toolchain and `debug` version
+TRACKING_COVERAGE ?= 0
+
 # OPENBLAS build options
 OPENBLAS_TARGET_ARCH:=
 OPENBLAS_SYMBOLSUFFIX:=
@@ -479,6 +484,9 @@ ifneq ($(OS), WINNT)
 JCXXFLAGS += -pedantic
 endif
 DEBUGFLAGS := -O0 -ggdb2 -DJL_DEBUG_BUILD -fstack-protector
+ifneq ($(TRACKING_COVERAGE), 0)
+DEBUGFLAGS += -ftest-coverage -fprofile-arcs
+endif
 SHIPFLAGS := -O3 -ggdb2 -falign-functions
 endif
 
