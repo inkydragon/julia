@@ -34,8 +34,11 @@ make -j `nproc`  debug
 # in root dir: `julia`
 
 mkdir julia-lcov/
-lcov --no-external --capture --rc lcov_branch_coverage=1    --directory src/ --directory cli/ --output-file julia-lcov/julia_build.info
-genhtml --branch-coverage --demangle-cpp --ignore-errors source --legend --title "[build process] commit `git rev-parse HEAD`" \
+lcov --no-external --capture --rc lcov_branch_coverage=1  \
+    --directory src/ --directory src/support/ --directory cli/  \
+    --output-file julia-lcov/julia_build.info
+genhtml --branch-coverage --demangle-cpp --ignore-errors source --legend  \
+    --title "[build process] commit `git rev-parse HEAD`"  \
     --output-directory=julia-lcov/lcov-html-build julia-lcov/julia_build.info
 ```
 
@@ -48,16 +51,21 @@ HTML report is located in `./julia-lcov/lcov-html-build/`.
 # in root dir: `julia`
 
 # gen test baseline
-lcov --no-external --capture --initial --rc lcov_branch_coverage=1    --directory src/ --directory cli/ \
+lcov --no-external --capture --initial --rc lcov_branch_coverage=1  \
+    --directory src/ --directory src/support/ --directory cli/  \
     --output-file julia-lcov/julia_test_baseline.info
 # run julia's test
 make -j `nproc` test debug
 # get cov data after test
-lcov --no-external --capture --rc lcov_branch_coverage=1    --directory src/ --directory cli/ --output-file julia-lcov/julia_test_end.info
+lcov --no-external --capture --rc lcov_branch_coverage=1  \
+    --directory src/ --directory src/support/ --directory cli/  \
+    --output-file julia-lcov/julia_test_end.info
 # merge data
-lcov --rc lcov_branch_coverage=1    --add-tracefile julia-lcov/julia_test_baseline.info  --add-tracefile julia-lcov/julia_test_end.info \
+lcov --rc lcov_branch_coverage=1  \
+    --add-tracefile julia-lcov/julia_test_baseline.info  --add-tracefile julia-lcov/julia_test_end.info \
     --output-file julia-lcov/julia_test.info
-genhtml --branch-coverage --demangle-cpp --ignore-errors source --legend --title "[test only] commit `git rev-parse HEAD`" \
+genhtml --branch-coverage --demangle-cpp --ignore-errors source --legend  \
+    --title "[test only] commit `git rev-parse HEAD`"  \
     --output-directory=julia-lcov/lcov-html-test  julia-lcov/julia_test.info
 ```
 
@@ -69,7 +77,7 @@ HTML report is located in `./julia-lcov/lcov-html-test/`.
 - rm all `*.gcda`
 ```sh
 # only rm *.gcda
-lcov --zerocounters --directory src/ --directory cli/
+lcov --zerocounters  --directory src/ --directory src/support/ --directory cli/
 ```
 
 - Compile flag `--coverage` works for both gcc and clang
