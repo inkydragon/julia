@@ -35,7 +35,7 @@ make -j `nproc`  debug
 
 mkdir julia-lcov/
 lcov --no-external --capture --rc lcov_branch_coverage=1  \
-    --directory src/ --directory src/support/ --directory cli/  \
+    --directory src/ --directory src/support/ --directory src/flisp/ --directory cli/  \
     --output-file julia-lcov/julia_build.info
 genhtml --branch-coverage --demangle-cpp --ignore-errors source --legend  \
     --title "[build process] commit `git rev-parse HEAD`"  \
@@ -52,13 +52,13 @@ HTML report is located in `./julia-lcov/lcov-html-build/`.
 
 # gen test baseline
 lcov --no-external --capture --initial --rc lcov_branch_coverage=1  \
-    --directory src/ --directory src/support/ --directory cli/  \
+    --directory src/ --directory src/support/ --directory src/flisp/ --directory cli/  \
     --output-file julia-lcov/julia_test_baseline.info
 # run julia's test
 make -j `nproc` test debug
 # get cov data after test
 lcov --no-external --capture --rc lcov_branch_coverage=1  \
-    --directory src/ --directory src/support/ --directory cli/  \
+    --directory src/ --directory src/support/ --directory src/flisp/ --directory cli/  \
     --output-file julia-lcov/julia_test_end.info
 # merge data
 lcov --rc lcov_branch_coverage=1  \
@@ -77,7 +77,7 @@ HTML report is located in `./julia-lcov/lcov-html-test/`.
 - rm all `*.gcda`
 ```sh
 # only rm *.gcda
-lcov --zerocounters  --directory src/ --directory src/support/ --directory cli/
+lcov --zerocounters  --directory src/ --directory src/support/ --directory src/flisp/ --directory cli/
 ```
 
 - Compile flag `--coverage` works for both gcc and clang
