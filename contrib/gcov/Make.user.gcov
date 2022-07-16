@@ -1,0 +1,2 @@
+# Enable code coverage
+TRACKING_COVERAGE = 1
