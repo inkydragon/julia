@@ -54,8 +54,12 @@ HTML report is located in `./julia-lcov/lcov-html-build/`.
 lcov --no-external --capture --initial --rc lcov_branch_coverage=1  \
     --directory src/ --directory src/support/ --directory src/flisp/ --directory cli/  \
     --output-file julia-lcov/julia_test_baseline.info
+
 # run julia's test
 make -j `nproc` test debug
+make -C src/flisp/ test debug
+make -C test/  embedding gcext debug
+
 # get cov data after test
 lcov --no-external --capture --rc lcov_branch_coverage=1  \
     --directory src/ --directory src/support/ --directory src/flisp/ --directory cli/  \
