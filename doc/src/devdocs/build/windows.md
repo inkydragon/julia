@@ -144,8 +144,10 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
         # tools
         pacman -S cmake diffutils git m4 make patch tar p7zip curl python
 
-        # compiler: mingw x64
+        # For 64 bit Julia, install x86_64
         pacman -S mingw-w64-x86_64-gcc mingw-w64-x86_64-gcc-fortran
+        # For 32 bit Julia, install i686
+        pacman -S mingw-w64-i686-gcc mingw-w64-i686-gcc-fortran
         ```
 
     4. Configuration of MSYS2 is complete. Now `exit` the MSYS2 shell.
@@ -153,7 +155,7 @@ Note: MSYS2 requires **64 bit** Windows 7 or newer.
 
  2. Build Julia and its dependencies with pre-build dependencies.
 
-    1. Open a new [**MINGW64 shell**](https://www.msys2.org/docs/environments/#overview)
+    1. Open a new [**MINGW64/32 shell**](https://www.msys2.org/docs/environments/#overview)
         and clone the Julia sources
         ```sh
         git clone https://github.com/JuliaLang/julia.git
