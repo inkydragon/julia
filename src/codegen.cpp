@@ -2333,8 +2333,7 @@ static void jl_add_method_root(jl_codectx_t &ctx, jl_value_t *val)
     JL_GC_POP();
 }
 
-// --- generating function calls ---
-
+// --- generating function calls --
 static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *name)
 {
     jl_binding_t *bnd = NULL;
@@ -3812,6 +3811,7 @@ static void undef_var_error_ifnot(jl_codectx_t &ctx, Value *ok, jl_sym_t *name)
     ctx.builder.SetInsertPoint(ifok);
 }
 
+extern void recordGlobalRef(jl_module_t *mod, jl_sym_t *name);
 // returns a jl_ppvalue_t location for the global variable m.s
 // if the reference currently bound or assign == true,
 //   pbnd will also be assigned with the binding address
@@ -3833,12 +3833,6 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
     else {
         b = jl_get_binding(m, s);
         if (b == NULL) {
-            /*
-            jl_printf(JL_STDOUT,"Not exist!\n");
-            jl_error("Shouldn't be here!");
-            jl_static_show(JL_STDOUT,(jl_value_t*)m);
-            jl_printf(JL_STDOUT,"Not exist!\n");
-            */
             // var not found. switch to delayed lookup.
             Constant *initnul = V_null;
             GlobalVariable *bindinggv = new GlobalVariable(*ctx.f->getParent(), T_pjlvalue,
@@ -3873,6 +3867,7 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         if (bv!=NULL && b->constp == 1 && jl_is_intrinsic(bv)){
             return NULL;
         }
+        recordGlobalRef(m, s);
         /*
         if (b->constp == 1 && jl_is_intrinsic(b->value)){
             // emit a GlobalVariable for a jl_value_t named "cname"
@@ -5037,7 +5032,7 @@ static Value *get_current_task(jl_codectx_t &ctx)
     const int ptls_offset = offsetof(jl_task_t, gcstack);
     return ctx.builder.CreateInBoundsGEP(
         T_pjlvalue, emit_bitcast(ctx, ctx.pgcstack, T_ppjlvalue),
-        ConstantInt::get(T_size, -ptls_offset / sizeof(void *)),
+        ConstantInt::get(T_size, -(ptls_offset / sizeof(void *))),
         "current_task");
 }
 
@@ -5225,7 +5220,7 @@ static void emit_cfunc_invalidate(
 }
 
 static Function* gen_cfun_wrapper(
-    Module *into, jl_codegen_params_t &params,
+    jl_method_instance_t* parentMI, Module *into, jl_codegen_params_t &params,
     const function_sig_t &sig, jl_value_t *ff, const char *aliasname,
     jl_value_t *declrt, jl_method_instance_t *lam,
     jl_unionall_t *unionall_env, jl_svec_t *sparam_vals, jl_array_t **closure_types)
@@ -5338,6 +5333,9 @@ static Function* gen_cfun_wrapper(
     ctx.world = world;
     ctx.name = name;
     ctx.funcName = name;
+    if (parentMI != nullptr){
+        ctx.linfo = parentMI;
+    }
 
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", cw);
     ctx.builder.SetInsertPoint(b0);
@@ -5860,7 +5858,7 @@ static jl_cgval_t emit_cfunction(jl_codectx_t &ctx, jl_value_t *output_type, con
     // try to look up this function for direct invoking
     jl_method_instance_t *lam = sigt ? jl_get_specialization1((jl_tupletype_t*)sigt, world, &min_valid, &max_valid, 0) : NULL;
     Value *F = gen_cfun_wrapper(
-            jl_Module, ctx.emission_context,
+            ctx.linfo, jl_Module, ctx.emission_context,
             sig, fexpr_rt.constant, NULL,
             declrt, lam,
             unionall_env, sparam_vals, &closure_types);
@@ -5959,7 +5957,7 @@ const char *jl_generate_ccallable(void *llvmmod, void *sysimg_handle, jl_value_t
             }
             else {
                 jl_method_instance_t *lam = jl_get_specialization1((jl_tupletype_t*)sigt, world, &min_valid, &max_valid, 0);
-                gen_cfun_wrapper((Module*)llvmmod, params, sig, ff, name, declrt, lam, NULL, NULL, NULL);
+                gen_cfun_wrapper(nullptr, (Module*)llvmmod, params, sig, ff, name, declrt, lam, NULL, NULL, NULL);
             }
             JL_GC_POP();
             return name;

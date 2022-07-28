@@ -390,281 +390,71 @@ static inline Instruction *maybe_mark_load_dereferenceable(Instruction *LI, bool
         alignment = julia_alignment(jt);
     return maybe_mark_load_dereferenceable(LI, can_be_null, size, alignment);
 }
-static char int2bitchar(uint8_t i){
-    if (i >= (uint8_t)10){
-        return i - 10 + 'A';
-    }
-    else{
-        return i + '0';
-    }
-}
-// Returns T_pjlvalue
-static std::set<uint64_t> PointerPool;
-// TODO: change the function to the correct one
-extern "C" JL_DLLEXPORT void jl_sym_to_fully_qualified_sym(std::stringstream &out, jl_sym_t* name) JL_NOTSAFEPOINT;
-extern "C" JL_DLLEXPORT void jl_value_to_string(std::stringstream &out, jl_value_t *v);
-extern "C" JL_DLLEXPORT void jl_module_to_string(std::stringstream &s, jl_module_t* m) JL_NOTSAFEPOINT;
-extern "C" JL_DLLEXPORT void jl_datatype_to_string(std::stringstream &out, jl_value_t *v, jl_datatype_t *vt, struct recur_list *depth) JL_NOTSAFEPOINT;
-// Used for global variable emitting, to track value from global variable
-std::map<std::string, jl_value_t*> global_binding_pool;
-std::map<jl_value_t*, std::string> rev_global_binding_pool;
-// used for immutable value encoding
 
-char encodeChar(uint8_t c){
-    assert(0<= c && c <= 15);
-    if (c >= 10){
-        return c - 10 + 'A';
-    }
-    else{
-        return c + '0';
-    }
-}
+extern void registerExternalValue(jl_method_instance_t* mi, jl_value_t* v, std::string& llvmName, jl_binding_t* bnd);
+extern void registerJLBinding(jl_method_instance_t* mi, std::string& llvmName, jl_binding_t* bnd, bool isSlot);
+extern void recordGlobalRef(jl_module_t *mod, jl_sym_t *name);
 
-void encodeBytes(std::stringstream& os, uint8_t* s, size_t num){
-    std::vector<char> v(2*num + 1);
-    v[2*num] = '\0';
-    for (size_t i = 0; i < num; i++){
-        uint8_t c = s[i];
-        char highbit = encodeChar(c >> 4);
-        char lowbit = encodeChar(c & 0b00001111);
-        v[2*i] = highbit;
-        v[2*i + 1] = lowbit;
+static Value *emitExternalJuliaValue(jl_codectx_t &ctx, jl_value_t *p, jl_binding_t* bnd){
+    std::string llvmName;
+    // either the binding is a nullptr or is a constant pointer
+    assert(bnd == nullptr || bnd->constp);
+    assert(ctx.linfo);
+    registerExternalValue(ctx.linfo, p, llvmName, bnd);
+    llvm::Module* M = ctx.f->getParent();
+    GlobalVariable* gv = cast_or_null<GlobalVariable>(M->getNamedValue(llvmName));
+    if (gv==nullptr){
+        gv = new GlobalVariable(
+            *M,
+            T_jlvalue,
+            // TODO: problem of constant binding
+            false,
+            GlobalVariable::ExternalLinkage,
+            nullptr,
+            llvmName,
+            nullptr,
+            llvm::GlobalVariable::NotThreadLocal,
+            AddressSpace::Generic,
+            true);
     }
-    os << v.data();
-    return;
+    return (Value *)gv;
 }
 
-// also decode string and symbol, although they are not bit value
-void encodeImmutableValue(std::stringstream& os, uint8_t* v, jl_datatype_t* dt){
-    // Be careful that we can't include '\0' in the string.
-    // len is the non-'\0' char number
-    if (dt == jl_string_type){
-        const char* sname = jl_string_ptr((jl_value_t*)v);
-        size_t len = strlen(sname);
-        os << 'c';
-        os << len;
-        os << 'c';
-        encodeBytes(os, (uint8_t*)sname, len);
-        return;
-    }
-    else if (dt == jl_symbol_type){
-        char* symname = jl_symbol_name((jl_sym_t*)v);
-        size_t len = strlen(symname);
-        os << 's';
-        os << len;
-        os << 's';
-        encodeBytes(os, (uint8_t*)symname, len);
-        return;
-    }
-    assert(jl_is_concrete_immutable((jl_value_t*)dt));
-    // Firstly a ghost value, 
-    if (dt->instance){
-        return;
-    }
-    size_t nfields = jl_datatype_nfields(dt);
-    if (dt->layout && nfields == 0){
-        size_t byte_num = jl_datatype_size(dt);
-        if (byte_num > 0){
-            // pritimive type
-            encodeBytes(os, v, byte_num);
-        }
-        else{
-            return;
-        }
-    }
-    assert(dt->types != NULL);
-    for (size_t i = 0; i < nfields; i++){
-        jl_value_t* _fieldtype = jl_svec_ref(dt->types, i);
-        assert(jl_is_datatype(_fieldtype));
-        jl_datatype_t* fieldtype = (jl_datatype_t*)_fieldtype;
-        size_t offset = jl_field_offset(dt, i);
-        if (fieldtype == jl_string_type){
-            encodeImmutableValue(os, *((uint8_t**)(v + offset)), jl_string_type);
-        }
-        else if (fieldtype == jl_symbol_type){
-            encodeImmutableValue(os, *((uint8_t**)(v + offset)), jl_symbol_type);
-        }
-        else{
-            // TODO: use more accurate predicate to test whether the field is allocated inline
-            if (jl_is_concrete_immutable(_fieldtype)){
-                // inline stored data
-                encodeImmutableValue(os, v + offset, (jl_datatype_t*)fieldtype);
-            } 
-            else{
-                // encode a null pointer
-                os << "0000000000000000";
-            }
-        }
-    }
-}
-// from_binding decides whether the literal value is from a global binding
-static Value *literal_pointer_val_internal(jl_codectx_t &ctx, jl_value_t *p, int from_binding)
-{
+static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p){
     if (p == NULL)
         return V_null;
     if (!imaging_mode)
         return literal_static_pointer_val(p);
     if (imaging_mode && jl_options.image_codegen == 1){
-        std::stringstream os;
-        Module* M = ctx.f->getParent();
-        //TODO : deal with abstract type
-        // TODO: deal with special bittype like int64, int32
-        // Maybe we should just emit a uniform bittype ?
-        jl_value_t* typeof_p = jl_typeof(p);
-        if (jl_is_module(p)){
-            os << "julia::const::module::";
-            jl_module_to_string(os, ((jl_module_t*)p));
-        }
-        else if (jl_is_bool(p)){
-            //special case for boolean constant, used in boxed_special
-            if (p==jl_true){
-                os << "julia::const::bool::true";
-            }
-            else if (p==jl_false){
-                os << "julia::const::bool::false";
-            }
-            else{
-                assert(false);
-            }
-        }
-        else if (jl_is_datatype(p)) {
-            //jl_datatype_t *dt = (jl_datatype_t*)p;
-            // DataTypes are prefixed with a +
-            os << "julia::const::datatype::";
-            jl_value_to_string(os, p);
-        }
-        // used in typeassert
-        else if (jl_is_typename(p)){
-            // TODO: handle this case
-            os << "julia::const::typename::";
-            os << jl_symbol_name(((jl_typename_t*)p)->name);
-        }
-        else if (jl_isa(p,(jl_value_t*)jl_function_type)) {
-            jl_datatype_t *dt = (jl_datatype_t*)(jl_typeof(p));
-            os << "julia::const::generic_function::";
-            jl_module_to_string(os, dt->name->module);
-            os << ".";
-            jl_sym_to_fully_qualified_sym(os, dt->name->mt->name);
-        }
-        else if (jl_is_method_instance(p)) {
-            jl_value_t* meth = (jl_value_t*)(((jl_method_instance_t*)p)->def.method);
-            if (jl_is_method(meth)){
-                // special treatment for Julia's boostrap
-                if (((jl_method_t*)meth)->name == jl_symbol("ROOT")){
-                    os << "julia::const::methodinstance::ROOT";   
-                }
-                assert("Shouldn't contain a method instance!");
-                // jl_method_instance_t *linfo = (jl_method_instance_t*)p;
-                // Type-inferred functions are also prefixed with a -
-                // if (jl_is_method(linfo->def.method))
-                //    return julia_pgv(ctx, "-", linfo->def.method->name, linfo->def.method->module, p);
-            }
-            else{
-                jl_error("GlobalVariable for method instance is not deal with.");
-            }
-        }
-        else{
-            // if the value is an instance of a singleton type
-            // this is incorrect, we should use signame.cpp to serialize name...
-            if (jl_is_datatype(typeof_p) && jl_is_datatype_singleton((jl_datatype_t*)typeof_p)){
-                os << "julia::const::singleton::";
-                jl_value_to_string(os, typeof_p);
-            }
-            // This is incorrect, it 's possible that p can be a abstract type constructor...
-            // It seems Julia uses a lot of abstract type constructor, which is extremely bad.
-            else if (typeof_p == (jl_value_t*)jl_unionall_type){
-                os << "julia::const::abstract::";
-                jl_value_to_string(os, p);
-            }
-            else if (jl_is_concrete_immutable(typeof_p) || jl_is_string(p)){
-                os << "julia::const::bitvalue::";
-                //assert(typeof_p != (jl_value_t*)jl_unionall_type);
-                jl_value_to_string(os, typeof_p);
-                os << "::";
-                uint8_t* dataptr;
-                int bitsize;
-                if (jl_is_string(p)){
-                    // len of string doesn't count '\0'
-                    bitsize = jl_string_len(p);
-                    dataptr = (uint8_t*)jl_string_ptr(p); 
-                    std::vector<char> v(2*bitsize+1);
-                    for (int i=0; i<bitsize;i++){
-                        uint8_t byte = dataptr[i];
-                        uint8_t highbit = byte >> 4;
-                        uint8_t lowbit = byte & (uint8_t)(0b00001111);
-                        v[2*i] = int2bitchar(highbit);
-                        v[2*i + 1] = int2bitchar(lowbit);
-                    }
-                    v[2*bitsize] = '\0';
-                    os << v.data();
-                }
-                else{
-                    //os << (char*)p;
-                    //bitsize = jl_datatype_size(((jl_datatype_t*)typeof_p));
-                    encodeImmutableValue(os, (uint8_t*) p, (jl_datatype_t*)typeof_p);
-                }
-            }
-            else if (jl_is_symbol(p)) {
-                jl_sym_t *sym = (jl_sym_t*)p;
-                os << "julia::const::symbol::";
-                os << jl_symbol_name(sym);
-            }
-            else{
-                // It's possible that a literal value comes from a const variable
-                // so this variable can be shared against module (that means we need to generate a uniform extenal name for them)
-                // non-const variable is always represented by a globalref, so we don't need to worry about them
-                // if the literal value is defined locally, then we can generate internal name for then value
-                // since they won't be shared
-                // A simple solution is to maintain a pointer pool, every time we emit a value,
-                // we check that whether the pointer appears in the pool, if it's in the pool, then we use a same name for this pointer
-                // also, literal value needs to be initalized, we can add a __init__ symbol for them...
-                // TODO: what about captured value in lambda function???
-
-                // A mutable value that can be shared, we firstly check whether this is a global binding const value
-                // Currently we require the value must be a const global
-
-                if (from_binding){
-                    return nullptr;
-                }
-                auto iter = rev_global_binding_pool.find(p);
-                // we can't directly cache GlobalVariable, since they can't be shared against different llvm module
-                if (iter != rev_global_binding_pool.end()){
-                    os << iter->second;
-                }
-                else {
-                    //jl_(p);
-                    jl_(jl_typeof(p));
-                    jl_error("Undealt error for global.");
-                    return nullptr;
-                }
-            }
-        }
-        GlobalVariable* gv = cast_or_null<GlobalVariable>(M->getNamedValue(os.str()));
-        if (gv==nullptr){
-            gv = new GlobalVariable(
-                *M,
-                T_jlvalue,
-                true,
-                GlobalVariable::ExternalLinkage,
-                nullptr,
-                os.str(),
-                nullptr,
-                llvm::GlobalVariable::NotThreadLocal,
-                AddressSpace::Generic,
-                true);
-        }
-        return (Value *)gv;
-        // something else gets just a generic name
-        //return julia_pgv(ctx, "jl_global#", p);
+        // The literal value doesn't come from null pointer
+        return emitExternalJuliaValue(ctx, p ,nullptr);
     }
-    
     Value *pgv = literal_pointer_val_slot(ctx, p);
     return tbaa_decorate(tbaa_const, maybe_mark_load_dereferenceable(
             ctx.builder.CreateAlignedLoad(T_pjlvalue, pgv, Align(sizeof(void*))),
             false, jl_typeof(p)));
 }
-static Value *literal_pointer_val(jl_codectx_t &ctx, jl_value_t *p){
-    return literal_pointer_val_internal(ctx, p, 0);
+
+static Value *literal_binding_val(jl_codectx_t &ctx, jl_binding_t *p){
+    // we need to produce a global variable for jl_binding_t*
+    std::string llvmName;
+    registerJLBinding(ctx.linfo, llvmName, p, false);
+    llvm::Module* M = ctx.f->getParent();
+    GlobalVariable* gv = cast_or_null<GlobalVariable>(M->getNamedValue(llvmName));
+    if (gv==nullptr){
+        gv = new GlobalVariable(
+            *M,
+            T_jlvalue,
+            false,
+            GlobalVariable::ExternalLinkage,
+            nullptr,
+            llvmName,
+            nullptr,
+            llvm::GlobalVariable::NotThreadLocal,
+            AddressSpace::Generic,
+            true);
+    }
+    return (Value*)gv;
 }
 // Returns T_pjlvalue
 static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
@@ -675,10 +465,14 @@ static Value *literal_pointer_val(jl_codectx_t &ctx, jl_binding_t *p)
     if (!imaging_mode)
         return literal_static_pointer_val(p);
     // bindings are prefixed with jl_bnd#
-    Value *pgv = julia_pgv(ctx, "jl_bnd#", p->name, p->owner, p);
+    //Value *pgv = julia_pgv(ctx, "jl_bnd#", p->name, p->owner, p);
+    Value* pgv = literal_binding_val(ctx, p);
+    /*
     return tbaa_decorate(tbaa_const, maybe_mark_load_dereferenceable(
             ctx.builder.CreateAlignedLoad(T_pjlvalue, pgv, Align(sizeof(void*))),
             false, sizeof(jl_binding_t), alignof(jl_binding_t)));
+    */
+   return pgv;
 }
 
 // bitcast a value, but preserve its address space when dealing with pointer types
@@ -708,26 +502,7 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, Value *bv)
     Value *offset = ConstantInt::get(T_size, offsetof(jl_binding_t, value) / sizeof(size_t));
     return ctx.builder.CreateInBoundsGEP(T_prjlvalue, bv, offset);
 }
-static Value *emit_external_variable(jl_codectx_t &ctx, std::string s){
-    StringRef nameref(s);
-    llvm::Module* M = ctx.f->getParent();
-    GlobalVariable* gv = cast_or_null<GlobalVariable>(M->getNamedValue(nameref));
-    if (gv==nullptr){
-        gv = new GlobalVariable(
-            *M,
-            T_jlvalue,
-            true,
-            GlobalVariable::ExternalLinkage,
-            nullptr,
-            nameref,
-            nullptr,
-            llvm::GlobalVariable::NotThreadLocal,
-            AddressSpace::Generic,
-            true
-        );
-    }
-    return gv;
-}
+
 static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
 {
     // emit a literal_pointer_val to the value field of a jl_binding_t
@@ -735,60 +510,30 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
     // To emit a binding, we simplily emit the name of the binding
     Value *bv;
     if (imaging_mode && jl_options.image_codegen == 1){
-        std::stringstream os;
-        if (b->constp){
-            // globalname = "julia.constglobal.";
-            // we should place them in the pool first
-            bv = literal_pointer_val_internal(ctx,b->value, 1);
-            // nullptr means this is a mutable value, emit it with external name
-            // if it's not nullptr, we directly produce a name for it
-            if (bv == nullptr){
-                os << "julia::const_global::mutable::";
-                jl_module_to_string(os, b->owner);
-                os << ".";
-                jl_sym_to_fully_qualified_sym(os, b->name);
-                llvm::Module* M = ctx.f->getParent();
-                GlobalVariable* gv = cast_or_null<GlobalVariable>(M->getNamedValue(os.str()));
-                if (gv==nullptr){
-                    gv = new GlobalVariable(
-                    *M,
-                    T_jlvalue,
-                    true,
-                    GlobalVariable::ExternalLinkage,
-                    nullptr,
-                    os.str(),
-                    nullptr,
-                    llvm::GlobalVariable::NotThreadLocal,
-                    AddressSpace::Generic,
-                    true);
-                }
-                global_binding_pool[os.str()] = b->value;
-                rev_global_binding_pool[b->value] = os.str();
-                return (Value *)gv;
-            }
+        // To emit a global variable for a value, which stems from a binding
+        // We decide by following procedure
+        // 1. if the value is a toplevel value, like types, generic functions and bitsvalue we directly emit it
+        // 2. if the value is not bitsvalue (concrete immutable with pointer field), and we know that the value is referred by a 
+        //constant jl_binding_t, we emit a global ref
+        // 3. else we emit a pointer
+        if (b->constp && jl_atomic_load_relaxed(&(b->value)) != NULL){
+            bv = emitExternalJuliaValue(ctx, jl_atomic_load_relaxed(&(b->value)), b);
             return bv;
         }
         else{
             // we should produce a slot for non-constant value
-            jl_safe_printf("A non constant binding is found!");
-            os << "julia::globalslot::";
-            jl_module_to_string(os, b->owner);
-            // Actually a '.', but we need to get module, so we use a :: to make out life easier.
-            os << "::";
-            jl_sym_to_fully_qualified_sym(os, b->name);
-            // the slot is actually a double pointer, addrspace(untracked)* addrspace(tracked)* {}
-            std::string globalname = os.str();
-            StringRef nameref(globalname);
+            std::string llvmName;
+            registerJLBinding(ctx.linfo, llvmName, b, true);
             llvm::Module* M = ctx.f->getParent();
-            GlobalVariable* gv = cast_or_null<GlobalVariable>(M->getNamedValue(nameref));
+            GlobalVariable* gv = cast_or_null<GlobalVariable>(M->getNamedValue(llvmName));
             if (gv==nullptr){
                 gv = new GlobalVariable(
                 *M,
                 T_prjlvalue,
-                true,
+                false,
                 GlobalVariable::ExternalLinkage,
                 nullptr,
-                nameref,
+                llvmName,
                 nullptr,
                 llvm::GlobalVariable::NotThreadLocal,
                 AddressSpace::Generic,
@@ -797,7 +542,6 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
             }
             return (Value*)gv;
         }
-        //exit(1);
     }
     if (imaging_mode)
         bv = emit_bitcast(ctx,
@@ -3431,13 +3175,27 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
     ctx.builder.SetInsertPoint(postBB);
     return box_merge;
 }
-static int ASTId = 0;
+
+extern void registerExprValue(jl_method_instance_t *mi, jl_value_t *v, std::string &llvmName);
 static Value* copyast_box(jl_codectx_t &ctx, const jl_cgval_t& ast){
     assert(ast.typ==(jl_value_t*)jl_expr_type && ast.constant);
-    //TODO : add an initialzer here to init Expr from a string
-    std::string name = "julia.copyast.ref"; 
-    llvm::raw_string_ostream(name) << ASTId;
-    ASTId += 1;
+    std::string name; 
+    assert(ast.constant != nullptr);
+    jl_value_t* jl_string_f = jl_eval_string("Base.string");
+    if (jl_string_f != nullptr){
+        jl_value_t** args;
+        JL_GC_PUSHARGS(args, 3);
+        args[0] = jl_string_f;
+        args[1] = ast.constant;
+        args[2] = jl_apply(args, 2);
+        jl_value_t* rt = args[2]; 
+        assert(jl_is_string(rt));
+        JL_GC_POP();
+        registerExprValue(ctx.linfo, rt, name);
+    }
+    else{
+        registerExternalValue(ctx.linfo, ast.constant, name, nullptr);
+    }
     StringRef nameref(name);
     llvm::Module* M = ctx.f->getParent();
     GlobalVariable* gv = cast_or_null<GlobalVariable>(M->getNamedValue(nameref));

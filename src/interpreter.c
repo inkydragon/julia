@@ -10,7 +10,7 @@
 #include "builtin_proto.h"
 #include "julia_assert.h"
 #include "dyncall.h"
-
+#include "interpreter.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -24,6 +24,7 @@ typedef struct {
     size_t ip; // Leak the currently-evaluating statement index to backtrace capture
     int preevaluation; // use special rules for pre-evaluating expressions (deprecated--only for ccall handling)
     int continue_at; // statement index to jump to after leaving exception handler (0 if none)
+    int jit;
 } interpreter_state;
 
 
@@ -115,6 +116,37 @@ static jl_value_t *eval_methoddef(jl_expr_t *ex, interpreter_state *s)
 }
 
 // expression evaluator
+JL_DLLEXPORT void* (*jl_staticjit_get_cache)(jl_method_instance_t*, size_t) = NULL;
+JL_DLLEXPORT void jl_staticjit_set_cache_geter(void* ptr){
+    jl_staticjit_get_cache = (void* (*)(jl_method_instance_t*, size_t))ptr;
+}
+
+JL_DLLEXPORT void* (*jl_get_cfunction_ptr)(jl_method_instance_t*, size_t) = NULL;
+JL_DLLEXPORT void jl_set_get_cfunction_ptr(void* ptr){
+    jl_get_cfunction_ptr = (void* (*)(jl_method_instance_t*, size_t))ptr;
+}
+extern int must_be_compiled(jl_code_info_t* thk);
+static jl_value_t* direct_call(jl_value_t **argv, size_t nargs, interpreter_state *s, int* useCache){
+    jl_value_t *result = NULL;
+    if (jl_staticjit_get_cache != NULL && *useCache){
+        jl_method_instance_t* mi = jl_method_lookup(argv,nargs,jl_world_counter);
+        // Prevent compiling macro call
+        if (mi != NULL && (jl_is_method(mi->def.method) && jl_symbol_name(mi->def.method->name)[0] != '@')){
+            if (mi->def.method->module != jl_core_module){
+                //jl_((jl_value_t*)mi);
+                void* callptr = (*jl_staticjit_get_cache)(mi, jl_world_counter);
+                jl_value_t* (*jl_callptr)(jl_value_t*,jl_value_t**,size_t) = callptr;
+                if (callptr != NULL){
+                    result = jl_callptr(argv[0],&(argv[1]),nargs-1);
+                    *useCache = 1;
+                    return result;
+                }
+            }
+        }
+    }
+    *useCache = 0;
+    return result;
+}
 
 static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s)
 {
@@ -124,7 +156,16 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     size_t i;
     for (i = 0; i < nargs; i++)
         argv[i] = eval_value(args[i], s);
-    jl_value_t *result = jl_apply(argv, nargs);
+    jl_value_t *result = NULL;
+    int useCache = s->jit;
+    result = direct_call(argv, nargs, s, &useCache);
+    if (!useCache){
+        result = jl_apply(argv, nargs);
+    }
+    if (result == NULL){
+        jl_printf(JL_STDOUT,"shouldn't  be null here!");
+        exit(1);
+    }
     JL_GC_POP();
     return result;
 }
@@ -166,6 +207,67 @@ static void eval_stmt_value(jl_value_t *stmt, interpreter_state *s)
 {
     jl_value_t *res = eval_value(stmt, s);
     s->locals[jl_source_nslots(s->src) + s->ip] = res;
+}
+static jl_value_t* jl_new_ptr(jl_value_t* ptype, jl_value_t* pvalue){
+    return jl_new_bits(ptype, (void*)pvalue);
+}
+// Input parameter must be set correctly, otherwise calling conversion will be broken
+static void setInputParameter(DCCallVM* vm, jl_value_t* _dt, jl_value_t* e){
+    // Firstly we set floating point type
+    if (_dt == (jl_value_t*)jl_float16_type){
+        assert("Float16 is not supported!");
+    }
+    else if(_dt == (jl_value_t*)jl_float32_type){
+        dcArgFloat(vm, jl_unbox_float32(e));
+        return;
+    }
+    else if(_dt == (jl_value_t*)jl_float64_type){
+        dcArgDouble(vm, jl_unbox_float64(e));
+        return;
+    }
+    // Then we set pointer type
+    if (_dt==(jl_value_t*)jl_any_type){
+        dcArgPointer(vm,e);    
+    }
+    else if (jl_is_abstract_ref_type(_dt)){
+        dcArgPointer(vm,*(void**)e); 
+    }
+    else if (jl_is_cpointer_type(_dt)){
+        dcArgPointer(vm,(void*)(*((uint64_t*)e)));
+    }
+    else if (jl_is_primitivetype(_dt)){
+        size_t size = jl_datatype_size(_dt);
+        switch (size)
+        {
+        case 0:
+            break;
+        case 1:
+            dcArgChar(vm,jl_unbox_bool(e));
+            break;
+        case 2:
+            dcArgShort(vm,jl_unbox_int16(e));
+            break;
+        case 4:
+            dcArgInt(vm,jl_unbox_uint32(e));
+            break;
+        case 8:
+            dcArgLong(vm,jl_unbox_int64(e));
+            break;
+        case 16:
+            dcArgLongLong(vm,*(long long int*)(e));
+            break;
+        default:
+            jl_safe_printf("Might be unsupported primitive input type, at file %s:%d \n",jl_filename,jl_lineno);
+            jl_(_dt);
+            exit(1);
+            break;
+        }
+    }
+    else{
+        jl_safe_printf("Might be unsupported primitive input type, at file %s:%d \n",jl_filename,jl_lineno);
+        jl_(_dt);
+        dcArgPointer(vm,e);
+    }
 }
 
 static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
@@ -337,8 +439,13 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         JL_GC_PUSHARGS(argv, nargs);
         for (size_t i = 0; i < nargs; i++)
             argv[i] = eval_value(args[i], s);
+        size_t vararg = jl_unbox_long(argv[3]); // if vararg
+        if (vararg!=0){
+            jl_error("vararg doesn't support");
+        };
         jl_value_t* might_f = argv[0];
         jl_sym_t* fname = NULL;
+        jl_sym_t* flib = NULL;
         void* fptr = NULL;
         if (jl_is_symbol(might_f)){
             fname = (jl_sym_t*)might_f;
@@ -348,6 +455,36 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         }
         else if (jl_is_cpointer_type(jl_typeof(might_f)) || jl_is_uint64(might_f) || jl_is_int64(might_f)){
             fptr = (void*)(*(uint64_t*)(might_f));
+            if (fptr == NULL){
+                // we try to call a null pointer, which is bad;
+                JL_GC_POP();
+                jl_error("Try to call a null pointer");
+            }
+        }
+        else if (jl_is_tuple(might_f)){
+            assert(jl_nfields(might_f) == 2);
+            jl_value_t *t0 = jl_fieldref(might_f, 0);
+            if (jl_is_symbol(t0)){
+                fname = (jl_sym_t*)t0;
+            }
+            else if (jl_is_string(t0)){
+                fname = jl_symbol(jl_string_ptr(t0));
+            }
+            else{
+                exit(1);
+                assert("Shouldn't be here");
+            }
+            jl_value_t *t1 = jl_fieldref(might_f, 1);
+            if (jl_is_symbol(t1)){
+                flib = (jl_sym_t*)t1;
+            }
+            else if (jl_is_string(t1)){
+                flib = jl_symbol(jl_string_ptr(t1));
+            }
+            else{
+                exit(1);
+                assert("Shouldn't be here");
+            }
         }
         else{
             jl_safe_printf("Invalid ccall arguments");
@@ -378,8 +515,21 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             at = (jl_svec_t*)argv[2];
             JL_GC_POP();
         };
-        size_t vararg = jl_unbox_long(argv[3]); // if vararg
         assert(jl_is_symbol(argv[4]));
+        for (int k=0;k<ninput;k++){
+            jl_value_t* inputtype = jl_svec_ref(at,k);
+            jl_value_t* input_value = argv[5+k];
+            if (!jl_types_equal(jl_typeof(input_value), inputtype)){
+                if (jl_is_primitivetype(inputtype) && jl_is_primitivetype(jl_typeof(input_value))){
+                    jl_value_t* cf = jl_atomic_load_relaxed(&(jl_get_binding(jl_core_module, jl_symbol("convert"))->value));
+                    argv[5+k] = jl_apply_generic(cf,&input_value,1);
+                }
+                //jl_printf(JL_STDOUT, "Ccall might be error: with input type ");
+                //jl_(inputtype);
+                //jl_printf(JL_STDOUT, ", where is expected to be ");
+                //jl_(jl_typeof(input_value));
+            }
+        }
         //jl_sym_t *cc_sym = (jl_sym_t*)argv[4];
         jl_value_t* r = NULL;
         if (fname==jl_symbol("jl_value_ptr")){
@@ -396,7 +546,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
                 jl_value_t **pointer_root;
                 JL_GC_PUSHARGS(pointer_root, 1);
                 pointer_root[0] = jl_box_uint64((uint64_t)argv[5]);
-                r = jl_apply_generic(rt,pointer_root,1);
+                r = jl_new_ptr(rt,pointer_root[0]);
                 JL_GC_POP();
                 //jl_error("Shouldn't be here!");
             };
@@ -409,11 +559,43 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             // TODO: test this for 32bit platform
             const char* ptr = (const char *)jl_unbox_int64(argv[5]);
             size_t len = jl_unbox_int64(argv[6]);
-            printf(ptr);
-            printf("%ld",len);
             jl_value_t* new_sym = (jl_value_t*)jl_symbol_n(ptr,len);
             JL_GC_POP();
             return new_sym;
+        }
+        if (fname==jl_symbol("jl_symbol_name")){
+            // Input is type of (Any,), that is a symbol, return a Ptr{UInt8};
+            // TODO: test this for 32bit platform
+            const char* ptr = jl_symbol_name((jl_sym_t*)(argv[5]));
+            assert(jl_is_cpointer_type(rt));
+            jl_value_t **pointer_root;
+            JL_GC_PUSHARGS(pointer_root, 1);
+            pointer_root[0] = jl_box_uint64((uint64_t)ptr);
+            r = jl_new_ptr(rt,pointer_root[0]);
+            JL_GC_POP();
+            JL_GC_POP();
+            return r;
+        }
+        if (fname==jl_symbol("jl_dlsym")){
+            // Input is type of (Any,), that is a symbol, return a Ptr{UInt8};
+            // TODO: test this for 32bit platform
+            void** libpointer = *((void***)argv[5]);
+            const char* cstring = *((const char**)argv[6]);
+            void** store = *((void***)argv[7]);
+            int throw_err = jl_unbox_int32(argv[8]);
+            int raw_ptr = jl_dlsym(libpointer,cstring,store,throw_err);
+            jl_value_t **pointer_root;
+            JL_GC_PUSHARGS(pointer_root, 1);
+            jl_value_t* ptr_int = jl_box_uint32(raw_ptr);
+            pointer_root[0] = ptr_int;
+            // we need to invoke the constructor for Ptr{...} to create a Ptr pointer
+            // TODO: how to directly construct a Ptr{...}?
+            r = jl_new_ptr(rt,ptr_int);
+            //jl_safe_printf("After jl_string_ptr:%p",raw_ptr);
+            //jl_(r);
+            JL_GC_POP();
+            JL_GC_POP();
+            return r;
         }
         // If the input is not a raw pointer
         if (fptr == NULL){
@@ -426,9 +608,14 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             memcpy(&(ifname[1]),fname_cstr,l);
             //printf((const char*)ifname);
             //printf("\n");
-            jl_dlsym(jl_libjulia_internal_handle,(const char*)ifname,&fptr,0);
+            void* libhandle = jl_libjulia_internal_handle;
+            if (flib != NULL){
+                const char* s = jl_symbol_name(flib);
+                libhandle = jl_get_library_(s,1);
+            }
+            jl_dlsym(libhandle,(const char*)ifname,&fptr,0);
             if (fptr == NULL){
-                jl_dlsym(jl_libjulia_internal_handle,(const char*)fname_cstr,&fptr,0);
+                jl_dlsym(libhandle,(const char*)fname_cstr,&fptr,0);
             };
             if (fptr==NULL){
                 //if (fname == jl_symbol("jl_compile_methodinst")){
@@ -442,56 +629,14 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
                 */
             };
         }
-        if (vararg!=0){
-            jl_error("vararg doesn't support");
-        };
         DCCallVM* vm = dcNewCallVM(4096);
         dcMode(vm, DC_CALL_C_DEFAULT);
         dcReset(vm);
         for (int k=0;k<ninput;k++){
             jl_value_t* inputtype = jl_svec_ref(at,k);
             jl_value_t* input_value = argv[5+k];
-            if (inputtype==(jl_value_t*)jl_any_type){
-                dcArgPointer(vm,input_value);    
-            }
-            else if (inputtype==(jl_value_t*)jl_bool_type||inputtype==(jl_value_t*)jl_uint8_type||inputtype==(jl_value_t*)jl_int8_type){
-                dcArgChar(vm,jl_unbox_bool(input_value));
-            }
-            else if (inputtype==(jl_value_t*)jl_int64_type){
-                dcArgLong(vm,jl_unbox_int64(input_value));
-            }
-            else if (inputtype==(jl_value_t*)jl_uint64_type){
-                dcArgLong(vm,jl_unbox_uint64(input_value));
-            }
-            else if (inputtype==(jl_value_t*)jl_int32_type){
-                dcArgInt(vm,jl_unbox_int32(input_value));
-            }
-            else if (inputtype==(jl_value_t*)jl_uint32_type){
-                dcArgInt(vm,jl_unbox_uint32(input_value));
-            }
-            else if (jl_is_cpointer_type(inputtype)){
-                // input is a pointer, we need to convert it to a raw pointer
-                // jl_error("stop here!");
-                // jl_(inputtype);
-                // jl_(input_value);
-                // jl_safe_printf("%d",*((uint64_t*)input_value));
-                dcArgPointer(vm,(void*)(*((uint64_t*)input_value)));
-            }
-            else {
-                // We silently use pointer for most case
-                // we need to enable this since Symbol(::String) will call Core.sizeof
-                // which will triger this line
-                /*
-                jl_safe_printf("Might be unsupported input type: %s : %d",jl_filename,jl_lineno);
-                jl_(inputtype);
-                jl_(e);
-                */
-                if (jl_is_cpointer_type(inputtype)){
-                    jl_error("Pointer attack");
-                };
-                dcArgPointer(vm,input_value);
-            };
-        };
+            setInputParameter(vm, inputtype, input_value);
+        }
         if (rt==(jl_value_t*)jl_any_type||jl_is_array_type(rt)){
             r = (jl_value_t*)dcCallPointer(vm, (DCpointer)fptr);
         }
@@ -502,10 +647,10 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             r = jl_box_uint64((uint64_t)dcCallLong(vm, (DCpointer)fptr));
         }
         else if (rt==(jl_value_t*)jl_int32_type){
-            r = jl_box_int32((int32_t)dcCallLong(vm, (DCpointer)fptr));
+            r = jl_box_int32((int32_t)dcCallInt(vm, (DCpointer)fptr));
         }
         else if (rt==(jl_value_t*)jl_uint32_type){
-            r = jl_box_uint32((uint32_t)dcCallLong(vm, (DCpointer)fptr));
+            r = jl_box_uint32((uint32_t)dcCallInt(vm, (DCpointer)fptr));
         }
         else if (rt==(jl_value_t*)jl_nothing_type){
             dcCallVoid(vm, (DCpointer)fptr);
@@ -529,7 +674,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             pointer_root[0] = ptr_int;
             // we need to invoke the constructor for Ptr{...} to create a Ptr pointer
             // TODO: how to directly construct a Ptr{...}?
-            r = jl_apply_generic(rt,&ptr_int,1);
+            r = jl_new_ptr(rt,ptr_int);
             //jl_safe_printf("After jl_string_ptr:%p",raw_ptr);
             //jl_(r);
             JL_GC_POP();
@@ -559,29 +704,30 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
                 dcCallVoid(vm, (DCpointer)fptr);
                 r = ((jl_datatype_t*)rt)->instance;
                 break;
-            case 8:
+            case 1:
                 char char_value = dcCallChar(vm, (DCpointer)fptr);
                 ptr = (const void*)(&char_value);
                 break;
-            case 16:
+            case 2:
                 short short_value = dcCallShort(vm, (DCpointer)fptr);
                 ptr = (const void*)(&short_value);
                 break;
-            case 32:
+            case 4:
                 int int_value = dcCallInt(vm, (DCpointer)fptr);
                 ptr = (const void*)(&int_value);
                 break;
-            case 64:
+            case 8:
                 long long_value = dcCallLong(vm, (DCpointer)fptr);
                 ptr = (const void*)(&long_value);
                 break;
-            case 128:
+            case 16:
                 long long long_long_value = dcCallLongLong(vm, (DCpointer)fptr);
                 ptr = (const void*)(&long_long_value);
+                break;
             default:
                 r = (jl_value_t*)dcCallPointer(vm, (DCpointer)fptr);
                 ptr = NULL;
-                jl_safe_printf("Might be unsupported return type, at file %s:%d \n",jl_filename,jl_lineno);
+                jl_safe_printf("Might be unsupported primitive return type, at file %s:%d \n",jl_filename,jl_lineno);
                 jl_(rt);
                 break;
             }
@@ -590,7 +736,7 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
             }
         } else{
             r = (jl_value_t*)dcCallPointer(vm, (DCpointer)fptr);
-            jl_safe_printf("Might be unsupported return type, at file %s:%d \n",jl_filename,jl_lineno);
+            jl_safe_printf("Might be unsupported return non-primitive type, at file %s:%d \n",jl_filename,jl_lineno);
             jl_(rt);
         };
         
@@ -600,7 +746,35 @@ static jl_value_t *eval_value(jl_value_t *e, interpreter_state *s)
         return r;
     }
     else if (head == jl_cfunction_sym) {
-        jl_error("`cfunction` requires the compiler");
+        jl_value_t **argv;
+        JL_GC_PUSHARGS(argv, nargs);
+        for (size_t i = 0; i < nargs; i++){
+            argv[i] = eval_value(args[i], s);
+        }
+        assert(nargs == 5);
+        jl_value_t* cfuncType = argv[0];
+        assert(jl_is_cpointer_type(cfuncType));
+        jl_value_t* funcName = argv[1];
+        // assert(jl_is_symbol(funcName));
+        jl_value_t* func = eval_value(funcName, s);
+        assert(func != NULL);
+        jl_value_t* rt = argv[2];
+        jl_value_t* inputTypes = argv[3];
+        assert(jl_is_simplevector(inputTypes));
+        jl_value_t* cconv = argv[4];
+        assert(cconv == (jl_value_t*)jl_symbol("ccall"));
+        jl_value_t* method_instances_func = jl_atomic_load_relaxed(&(jl_get_binding((jl_module_t*)jl_main_module, jl_symbol("get_all_method_instances"))->value));
+        assert(method_instances_func != NULL);
+        jl_value_t* input[2] = {func, inputTypes};
+        jl_value_t* return_val = jl_apply_generic(method_instances_func, (jl_value_t**)&input, 2);
+        assert(jl_is_array(return_val));
+        assert(jl_array_len(return_val) == 1);
+        jl_method_instance_t* mi = (jl_method_instance_t*)jl_ptrarrayref((jl_array_t*)return_val, 0);
+        assert(jl_get_cfunction_ptr != NULL);
+        void* callptr = (*jl_get_cfunction_ptr)(mi, jl_world_counter);
+        jl_value_t* result = jl_new_bits(cfuncType, (const void*)&callptr);
+        JL_GC_POP();
+        return result;
     }
     jl_errorf("unsupported or misplaced expression %s", jl_symbol_name(head));
     abort();
@@ -927,13 +1101,15 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     locals[1] = (jl_value_t*)stmts;
     s->locals = locals + 2;
     s->src = src;
+    s->jit = 0;
+    int isva = 0;
     if (jl_is_module(mi->def.value)) {
         s->module = mi->def.module;
     }
     else {
         s->module = mi->def.method->module;
         size_t defargs = mi->def.method->nargs;
-        int isva = mi->def.method->isva ? 1 : 0;
+        isva = mi->def.method->isva ? 1 : 0;
         size_t i;
         s->locals[0] = f;
         assert(isva ? nargs + 2 >= defargs : nargs + 1 == defargs);
@@ -949,7 +1125,22 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->continue_at = 0;
     s->mi = mi;
     JL_GC_ENABLEFRAME(s);
-    jl_value_t *r = eval_body(stmts, s, 0, 0);
+    int useCache = 0;
+    jl_value_t* r;
+    // what's the number of args?
+    // we should add one here!
+    if (!isva){
+        if (s->jit || must_be_compiled(src)){
+            useCache = 1;
+            r = direct_call(s->locals, nargs + 1, s, &useCache);
+        }   
+    }
+    if (!useCache){
+        r = eval_body(stmts, s, 0, 0);
+    }
+    else{
+        assert(r != NULL);
+    }
     JL_GC_POP();
     return r;
 }
@@ -992,7 +1183,7 @@ jl_value_t *jl_interpret_opaque_closure(jl_opaque_closure_t *oc, jl_value_t **ar
     return r;
 }
 
-jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src)
+jl_value_t *NOINLINE jl_interpret_toplevel_thunk_internal(jl_interp_ctx* ctx, jl_module_t *m, jl_code_info_t *src)
 {
     interpreter_state *s;
     unsigned nroots = jl_source_nslots(src) + jl_source_nssavalues(src);
@@ -1004,6 +1195,7 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     s->sparam_vals = jl_emptysvec;
     s->continue_at = 0;
     s->mi = NULL;
+    s->jit = ctx->jit;
     JL_GC_ENABLEFRAME(s);
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
@@ -1013,10 +1205,16 @@ jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t 
     return r;
 }
 
+jl_value_t *NOINLINE jl_interpret_toplevel_thunk(jl_module_t *m, jl_code_info_t *src){
+    jl_interp_ctx ctx;
+    ctx.jit = 0;
+    return jl_interpret_toplevel_thunk_internal(&ctx, m, src);
+}
+
 // deprecated: do not use this method in new code
 // it uses special scoping / evaluation / error rules
 // which should instead be handled in lowering
-jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e, jl_code_info_t *src, jl_svec_t *sparam_vals)
+jl_value_t *NOINLINE jl_interpret_toplevel_expr_in_internal(jl_interp_ctx* ctx, jl_module_t *m, jl_value_t *e, jl_code_info_t *src, jl_svec_t *sparam_vals)
 {
     interpreter_state *s;
     jl_value_t **locals;
@@ -1028,11 +1226,18 @@ jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e
     s->preevaluation = (sparam_vals != NULL);
     s->continue_at = 0;
     s->mi = NULL;
+    s->jit = ctx->jit;
     JL_GC_ENABLEFRAME(s);
     jl_value_t *v = eval_value(e, s);
     assert(v);
     JL_GC_POP();
     return v;
+}
+
+jl_value_t *NOINLINE jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e, jl_code_info_t *src, jl_svec_t *sparam_vals){
+    jl_interp_ctx ctx;
+    ctx.jit = 0;
+    return jl_interpret_toplevel_expr_in_internal(&ctx, m, e, src, sparam_vals);
 }
 
 JL_DLLEXPORT size_t jl_capture_interp_frame(jl_bt_element_t *bt_entry,

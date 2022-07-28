@@ -386,6 +386,12 @@ JL_DLLEXPORT void jl_set_nth_field(jl_value_t *v, size_t idx0, jl_value_t *rhs)
     set_nth_field(st, v, idx0, rhs, 0);
 }
 
+// Used to initialize values in valueCoder.cpp
+JL_DLLEXPORT void jl_unsafe_set_nth_field(jl_value_t *v, size_t idx0, jl_value_t *rhs)
+{
+    jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
+    set_nth_field(st, v, idx0, rhs, 0);
+}
 
 // parsing --------------------------------------------------------------------
 
@@ -823,12 +829,15 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_int32_type) {
         n += jl_printf(out, "%" PRId32, *(int32_t*)v);
+        n += jl_printf(out, "i");
     }
     else if (vt == jl_int16_type) {
         n += jl_printf(out, "%" PRId16, *(int16_t*)v);
+        n += jl_printf(out, "s");
     }
     else if (vt == jl_int8_type) {
         n += jl_printf(out, "%" PRId8, *(int8_t*)v);
+        n += jl_printf(out, "c");
     }
     else if (vt == jl_uint64_type) {
         n += jl_printf(out, "0x%016" PRIx64, *(uint64_t*)v);
@@ -850,10 +859,14 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
 #endif
     }
     else if (vt == jl_float32_type) {
-        n += jl_printf(out, "%gf", *(float*)v);
+        n += jl_printf(out, "%gf0f(", *(float*)v);
+        n += jl_printf(out, "0x%08" PRIx32, *(uint32_t*)v);
+        n += jl_printf(out, ")");
     }
     else if (vt == jl_float64_type) {
-        n += jl_printf(out, "%g", *(double*)v);
+        n += jl_printf(out, "%g(", *(double*)v);
+        n += jl_printf(out, "0x%016" PRIx64, *(uint64_t*)v);
+        n += jl_printf(out, ")");
     }
     else if (vt == jl_bool_type) {
         n += jl_printf(out, "%s", *(uint8_t*)v ? "true" : "false");
@@ -935,7 +948,7 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
     }
     else if (vt == jl_symbol_type) {
         char *sn = jl_symbol_name((jl_sym_t*)v);
-        int quoted = !jl_is_identifier(sn) && jl_operator_precedence(sn) == 0;
+        int quoted = !jl_is_identifier(sn) /*&& jl_operator_precedence(sn) == 0*/;
         if (quoted)
             n += jl_printf(out, "Symbol(\"");
         else
@@ -978,9 +991,16 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         n += jl_printf(out, ">");
     }
     else if (vt == jl_linenumbernode_type) {
+        /*
         n += jl_printf(out, "#= ");
         n += jl_static_show_x(out, jl_linenode_file(v), depth);
         n += jl_printf(out, ":%" PRIuPTR " =#", jl_linenode_line(v));
+        */
+       // we need to use Core.LineNumberNode to ensure evaluatation
+        n += jl_printf(out, "Core.LineNumberNode(");
+        n += jl_printf(out, "%lu, ", jl_linenode_line(v));
+        n += jl_static_show_x(out, jl_linenode_file(v), depth);
+        n += jl_printf(out, ")");
     }
     else if (vt == jl_expr_type) {
         jl_expr_t *e = (jl_expr_t*)v;
@@ -1080,7 +1100,11 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         }
 
         n += jl_static_show_x_sym_escaped(out, sym);
-
+        #ifdef _P64
+            n += jl_printf(out, "0x%016" PRIx64, (uint64_t)v);
+        #else
+            n += jl_printf(out, "0x%08" PRIx32, (uint32_t)v);
+        #endif
         if (globfunc) {
             if (quote) {
                 n += jl_printf(out, ")");
@@ -1096,6 +1120,9 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         if (isnamedtuple) {
             if (tlen == 0)
                 n += jl_printf(out, "NamedTuple");
+            else{
+                n += jl_static_show_x(out, (jl_value_t*)vt, depth);
+            }
         }
         else if (!istuple) {
             n += jl_static_show_x(out, (jl_value_t*)vt, depth);
@@ -1105,8 +1132,18 @@ static size_t jl_static_show_x_(JL_STREAM *out, jl_value_t *v, jl_datatype_t *vt
         if (nb > 0 && tlen == 0) {
             uint8_t *data = (uint8_t*)v;
             n += jl_printf(out, "0x");
-            for(int i = nb - 1; i >= 0; --i)
-                n += jl_printf(out, "%02" PRIx8, data[i]);
+            // TODO: I don't know why is this reversed...
+            // maybe it's because we have different machine?
+            #define IS_BIG_ENDIAN (!*(unsigned char *)&(uint16_t){1})
+            if (!IS_BIG_ENDIAN){
+                for(int i = 0; i < nb; i++)
+                    n += jl_printf(out, "%02" PRIx8, data[i]);
+            }
+            else{
+                for(int i = nb - 1; i >= 0; --i)
+                    n += jl_printf(out, "%02" PRIx8, data[i]);
+            }
+            #undef IS_BIG_ENDIAN
         }
         else {
             size_t i = 0;

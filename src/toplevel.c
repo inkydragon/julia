@@ -21,7 +21,7 @@
 #include "julia_assert.h"
 #include "intrinsics.h"
 #include "builtin_proto.h"
-
+#include "interpreter.h"
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -33,7 +33,9 @@ JL_DLLEXPORT const char *jl_filename = "none"; // need to update jl_critical_err
 
 htable_t jl_current_modules;
 jl_mutex_t jl_modules_mutex;
-
+jl_value_t *jl_toplevel_eval_flex_internal(jl_interp_ctx* ctx, jl_module_t *JL_NONNULL m, jl_value_t *e);
+jl_value_t *NOINLINE jl_interpret_toplevel_thunk_internal(jl_interp_ctx* ctx, jl_module_t *m, jl_code_info_t *src);
+jl_value_t *NOINLINE jl_interpret_toplevel_expr_in_internal(jl_interp_ctx* ctx, jl_module_t *m, jl_value_t *e, jl_code_info_t *src, jl_svec_t *sparam_vals);
 JL_DLLEXPORT void jl_add_standard_imports(jl_module_t *m)
 {
     jl_module_t *base_module = jl_base_relative_to(m);
@@ -59,15 +61,46 @@ static jl_function_t *jl_module_get_initializer(jl_module_t *m JL_PROPAGATES_ROO
     return (jl_function_t*)jl_get_global(m, jl_symbol("__init__"));
 }
 
-
+extern JL_DLLEXPORT void* (*jl_staticjit_get_cache)(jl_method_instance_t*, size_t);
+JL_DLLEXPORT void (*jl_register_module)(jl_module_t*) = NULL;
+// special usage for require call
+jl_value_t* jl_call_jit(jl_value_t** args, size_t n, size_t world){
+    jl_method_instance_t* mi = jl_method_lookup(args, n, world);
+    if (mi != NULL && jl_staticjit_get_cache != NULL){
+        void* callptr = (*jl_staticjit_get_cache)(mi, jl_world_counter);
+        jl_value_t* (*jl_callptr)(jl_value_t*,jl_value_t**,size_t) = callptr;
+        if (callptr != NULL){
+            return jl_callptr(args[0], &(args[1]), n - 1);
+        }
+        else{
+            return NULL;
+        }
+    }
+    return NULL;
+}
+extern JL_DLLEXPORT void* (*jl_staticjit_get_cache)(jl_method_instance_t*, size_t);
 void jl_module_run_initializer(jl_module_t *m)
 {
     JL_TIMING(INIT_MODULE);
     jl_function_t *f = jl_module_get_initializer(m);
+    if (jl_register_module != NULL){
+        jl_register_module(m);
+    }
     if (f == NULL)
         return;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
+    ct->world_age = jl_world_counter;
+    if (jl_staticjit_get_cache != NULL){
+        jl_register_module(m);
+        jl_method_instance_t* mi = jl_method_lookup(&f, 1 ,jl_world_counter);
+        void* callptr = (*jl_staticjit_get_cache)(mi, jl_world_counter);
+        jl_value_t* (*jl_callptr)(jl_value_t*,jl_value_t**,size_t) = callptr;
+        assert(callptr != NULL);
+        jl_value_t* result = jl_callptr(f, NULL, 0);
+        ct->world_age = last_age;
+        return;
+    }
     JL_TRY {
         ct->world_age = jl_world_counter;
         jl_apply(&f, 1);
@@ -114,7 +147,7 @@ static int jl_is__toplevel__mod(jl_module_t *mod)
 }
 
 // TODO: add locks around global state mutation operations
-static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex)
+static jl_value_t *jl_eval_module_expr(jl_interp_ctx* ctx, jl_module_t *parent_module, jl_expr_t *ex)
 {
     jl_task_t *ct = jl_current_task;
     assert(ex->head == jl_module_sym);
@@ -183,17 +216,21 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
         }
         // add `eval` function
         form = jl_call_scm_on_ast("module-default-defs", (jl_value_t*)ex, newm);
+        // use default slow context
         jl_toplevel_eval_flex(newm, form, 0, 1);
         form = NULL;
     }
-
+    if (jl_register_module != NULL){
+        jl_register_module(newm);
+    }
     jl_array_t *exprs = ((jl_expr_t*)jl_exprarg(ex, 2))->args;
     for (int i = 0; i < jl_array_len(exprs); i++) {
         // process toplevel form
         ct->world_age = jl_world_counter;
         form = jl_expand_stmt_with_loc(jl_array_ptr_ref(exprs, i), newm, jl_filename, jl_lineno);
         ct->world_age = jl_world_counter;
-        (void)jl_toplevel_eval_flex(newm, form, 1, 1);
+        // use parent context
+        (void)jl_toplevel_eval_flex_internal(ctx, newm, form);
     }
     newm->primary_world = jl_world_counter;
     ct->world_age = last_age;
@@ -266,11 +303,12 @@ static jl_value_t *jl_eval_module_expr(jl_module_t *parent_module, jl_expr_t *ex
     return (jl_value_t*)newm;
 }
 
-static jl_value_t *jl_eval_dot_expr(jl_module_t *m, jl_value_t *x, jl_value_t *f, int fast)
+static jl_value_t *jl_eval_dot_expr(jl_interp_ctx* ctx, jl_module_t *m, jl_value_t *x, jl_value_t *f, int fast)
 {
     jl_task_t *ct = jl_current_task;
     jl_value_t **args;
     JL_GC_PUSHARGS(args, 3);
+    // We use default context, because it's likely x and f are quotenode...
     args[1] = jl_toplevel_eval_flex(m, x, fast, 0);
     args[2] = jl_toplevel_eval_flex(m, f, fast, 0);
     if (jl_is_module(args[1])) {
@@ -426,7 +464,13 @@ static jl_module_t *call_require(jl_module_t *mod, jl_sym_t *var) JL_GLOBALLY_RO
         reqargs[0] = require_func;
         reqargs[1] = (jl_value_t*)mod;
         reqargs[2] = (jl_value_t*)var;
-        m = (jl_module_t*)jl_apply(reqargs, 3);
+        jl_value_t* result = NULL/*jl_call_jit(reqargs, 3, jl_world_counter);*/;
+        if (result == NULL){
+            m = (jl_module_t*)jl_apply(reqargs, 3);
+        }
+        else{
+            m = (jl_module_t*)result;
+        }
         ct->world_age = last_age;
     }
     if (m == NULL || !jl_is_module(m)) {
@@ -621,8 +665,34 @@ static void jl_eval_errorf(jl_module_t *m, const char* fmt, ...)
     JL_GC_POP();
 }
 
-jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int fast, int expanded)
+int must_be_compiled(jl_code_info_t* thk){
+    assert(jl_is_code_info(thk));
+    assert(jl_typeis(thk->code, jl_array_any_type));
+    int has_intrinsics = 0, has_defs = 0, has_loops = 0, has_opaque = 0, has_compile = 0;
+    body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops, &has_opaque, &has_compile);
+    if (thk->parent != NULL && thk->parent != jl_nothing){
+        jl_method_instance_t* mi = thk->parent;
+        jl_module_t* m;
+        if (jl_is_module((jl_value_t*)mi->def.module)){
+            m = mi->def.module;
+        }
+        else{
+            m = mi->def.method->module;
+        }
+        while (m != m->parent){
+            m = m->parent;
+        }
+        if (m == jl_core_module){
+            return 0;
+        }
+    }
+    return ((!has_defs && (has_intrinsics || has_loops || has_compile)) && jl_staticjit_get_cache != NULL);
+}
+
+jl_value_t *jl_toplevel_eval_flex_internal(jl_interp_ctx* ctx, jl_module_t *JL_NONNULL m, jl_value_t *e)
 {
+    int fast = ctx->fast;
+    int expanded = ctx->expanded;
     jl_task_t *ct = jl_current_task;
     if (!jl_is_expr(e)) {
         if (jl_is_linenode(e)) {
@@ -640,7 +710,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
             if (*n == 0 && n > n0)
                 jl_eval_errorf(m, "all-underscore identifier used as rvalue");
         }
-        return jl_interpret_toplevel_expr_in(m, e, NULL, NULL);
+        return jl_interpret_toplevel_expr_in_internal(ctx, m, e, NULL, NULL);
     }
 
     jl_expr_t *ex = (jl_expr_t*)e;
@@ -652,7 +722,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         jl_value_t *rhs = jl_exprarg(ex, 1);
         // only handle `a.b` syntax here, so qualified names can be eval'd in pure contexts
         if (jl_is_quotenode(rhs) && jl_is_symbol(jl_fieldref(rhs, 0))) {
-            return jl_eval_dot_expr(m, lhs, rhs, fast);
+            return jl_eval_dot_expr(ctx, m, lhs, rhs, fast);
         }
     }
 
@@ -673,7 +743,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     jl_sym_t *head = jl_is_expr(ex) ? ex->head : NULL;
 
     if (head == jl_module_sym) {
-        jl_value_t *val = jl_eval_module_expr(m, ex);
+        jl_value_t *val = jl_eval_module_expr(ctx, m, ex);
         JL_GC_POP();
         return val;
     }
@@ -830,7 +900,12 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         jl_value_t *res = jl_nothing;
         int i;
         for (i = 0; i < jl_array_len(ex->args); i++) {
-            res = jl_toplevel_eval_flex(m, jl_array_ptr_ref(ex->args, i), fast, 0);
+            // context is inherited from parent context
+            // but no expanded is needed...
+            int cachedExpand = ctx->expanded;
+            ctx->expanded = 0;
+            res = jl_toplevel_eval_flex_internal(ctx, m, jl_array_ptr_ref(ex->args, i));
+            ctx->expanded = cachedExpand;
         }
         JL_GC_POP();
         return res;
@@ -862,7 +937,32 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
     // use interpreter everywhere
     // jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
     if (jl_options.image_codegen==1){
-        result = jl_interpret_toplevel_thunk(m, thk);
+        if (must_be_compiled((jl_code_info_t*)thk)) {
+            // use codegen
+            mfunc = method_instance_for_thunk(thk, m);
+            JL_GC_PUSH1(&mfunc);
+            jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
+            // Don't infer blocks containing e.g. method definitions, since it's probably not
+            // worthwhile and also unsound (see #24316).
+            // TODO: This is still not correct since an `eval` can happen elsewhere, but it
+            // helps in common cases.
+            size_t world = jl_world_counter;
+            ct->world_age = world;
+            if (!has_defs && jl_get_module_infer(m) != 0) {
+                (void)jl_type_infer(mfunc, world, 0);
+            }
+            void* callptr = (*jl_staticjit_get_cache)(mfunc, jl_world_counter);
+            jl_value_t* (*jl_callptr)(jl_value_t*,jl_value_t**,size_t) = callptr;
+            assert(jl_callptr);
+            result = jl_callptr(NULL, NULL, 0);
+            ct->world_age = last_age;
+            assert(result);
+            JL_GC_POP();
+        }
+        else{
+            // else we use intepreter
+            result = jl_interpret_toplevel_thunk_internal(ctx, m, thk);
+        }
         JL_GC_POP();
         return result;
     }
@@ -893,16 +993,34 @@ jl_value_t *jl_toplevel_eval_flex(jl_module_t *JL_NONNULL m, jl_value_t *e, int 
         if (has_opaque) {
             jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
         }
-        result = jl_interpret_toplevel_thunk(m, thk);
+        result = jl_interpret_toplevel_thunk_internal(ctx, m, thk);
     }
 
     JL_GC_POP();
     return result;
 }
 
+// Fully interpreter mode...
+jl_value_t *jl_toplevel_eval_flex(jl_module_t *m, jl_value_t *v, int fast, int expanded){
+    jl_interp_ctx ctx;
+    ctx.fast = fast;
+    ctx.expanded = expanded;
+    ctx.jit = 0;
+    return jl_toplevel_eval_flex_internal(&ctx, m, v);
+}
+
 JL_DLLEXPORT jl_value_t *jl_toplevel_eval(jl_module_t *m, jl_value_t *v)
 {
     return jl_toplevel_eval_flex(m, v, 1, 0);
+}
+
+JL_DLLEXPORT jl_value_t *jl_toplevel_eval_jit(jl_module_t *m, jl_value_t *v)
+{
+    jl_interp_ctx ctx;
+    ctx.expanded = 1;
+    ctx.fast = 1;
+    ctx.jit = 1;
+    return jl_toplevel_eval_flex_internal(&ctx, m, v);
 }
 
 // Check module `m` is open for `eval/include`, or throw an error.
