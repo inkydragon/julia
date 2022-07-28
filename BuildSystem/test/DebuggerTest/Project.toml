@@ -1,0 +1,7 @@
+name = "DebuggerTest"
+uuid = "612cf351-f3eb-48a1-9a4f-1493fde311a1"
+authors = ["chenningcong <393069484@qq.com>"]
+version = "0.1.0"
+
+[deps]
+Debugger = "31a5f54b-26ea-5ae9-a837-f05ce5417438"
