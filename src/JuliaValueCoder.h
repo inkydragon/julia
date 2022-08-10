@@ -41,18 +41,22 @@ class JuliaValueEncoder {
     void collectUnionComponent(SmallJLValueArray &arr, jl_value_t *v);
     SSAId encodeUnion(jl_value_t *v);
     SSAId encodeTypeName(jl_typename_t *t);
+    SSAId encodeExpr(jl_value_t* v);
+    SSAId encodeRegex(jl_value_t *v);
     SSAId encodeJuliaValue(jl_value_t *v);
     public:
+    JuliaValueEncoder();
     bool isRelocatable = true;
     std::string encodeExternalJuliaValue(jl_value_t *v);
     std::string encodeJLBinding(jl_binding_t* bnd);
-    private:
-    std::vector<BytesBuffer> SSAValues;
-    Scope scope;
     public:
     static std::unordered_map<jl_value_t *, jl_binding_t *> bindings;
     // We decide to generate name by our own;
     std::string llvmName;
+    private:
+    std::vector<BytesBuffer> SSAValues;
+    Scope scope;
+    jl_value_t* regexType;
 };
 
 class JuliaValueDecoder {
@@ -68,4 +72,5 @@ class JuliaValueDecoder {
     jl_array_t *SSAValues;
     std::vector<uint8_t> bytes;
     llvm::BinaryStreamReader reader;
+    jl_value_t* regexType;
 };

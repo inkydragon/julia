@@ -834,11 +834,28 @@ static jl_cgval_t emit_llvmcall(jl_codectx_t &ctx, jl_value_t **args, size_t nar
 
     // Make sure to find a unique name
     std::string ir_name;
-    while (true) {
-        raw_string_ostream(ir_name) << (ctx.f->getName().str()) << "u" << globalUnique++;
-        if (jl_Module->getFunction(ir_name) == NULL)
-            break;
+    if (jl_options.image_codegen == 1){
+        while (true) {
+            std::string&& fname = ctx.f->getName().str();
+            for (size_t i = 0; i < fname.size(); i++){
+                char c = fname[i];
+                if (!((c >= 'a' && c <= 'z' ) || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'))){
+                    c = '_';
+                }
+                raw_string_ostream(ir_name) << c;
+            }
+            raw_string_ostream(ir_name) << "u" << globalUnique++;
+            if (jl_Module->getFunction(ir_name) == NULL)
+                break;
+        }
     }
+    else{
+        while (true) {
+            raw_string_ostream(ir_name) << (ctx.f->getName().str()) << "u" << globalUnique++;
+            if (jl_Module->getFunction(ir_name) == NULL)
+                break;
+        }
+    }    
 
     // generate a temporary module that contains our IR
     std::unique_ptr<Module> Mod;

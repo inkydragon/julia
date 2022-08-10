@@ -40,7 +40,7 @@ public:
     std::string makeSafe(std::string name)
     {
         std::replace_if(
-            name.begin(), name.end(), [](const char &c) { return (c == '/'); }, ' ');
+            name.begin(), name.end(), [](const char &c) { return (c == '/' || c == '\\' || c == '@'); }, '_');
         return name;
     }
     std::string normalizeName(std::string name)

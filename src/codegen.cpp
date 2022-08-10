@@ -3867,7 +3867,9 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
         if (bv!=NULL && b->constp == 1 && jl_is_intrinsic(bv)){
             return NULL;
         }
-        recordGlobalRef(m, s);
+        if (bv!=NULL && b->constp){
+            recordGlobalRef(m, s);
+        }
         /*
         if (b->constp == 1 && jl_is_intrinsic(b->value)){
             // emit a GlobalVariable for a jl_value_t named "cname"

@@ -43,8 +43,8 @@ julia_flisp.boot.inc.phony: julia-deps
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT)/src julia_flisp.boot.inc.phony
 
 # Build the HTML docs (skipped if already exists, notably in tarballs)
-$(BUILDROOT)/doc/_build/html/en/index.html: $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl -o -name version_git.jl \) -prune -o -type f -print)
-	@$(MAKE) docs
+$(BUILDROOT)/doc/_build/html/en/index.html: # $(shell find $(BUILDROOT)/base $(BUILDROOT)/doc \( -path $(BUILDROOT)/doc/_build -o -path $(BUILDROOT)/doc/deps -o -name *_constants.jl -o -name *_h.jl -o -name version_git.jl \) -prune -o -type f -print)
+# @$(MAKE) docs
 
 julia-symlink: julia-cli-$(JULIA_BUILD_MODE)
 ifeq ($(OS),WINNT)
@@ -84,8 +84,8 @@ julia-sysimg-ji : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-sr
 julia-sysimg-bc : julia-stdlib julia-base julia-cli-$(JULIA_BUILD_MODE) julia-src-$(JULIA_BUILD_MODE) | $(build_private_libdir)
 	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-bc JULIA_EXECUTABLE='$(JULIA_EXECUTABLE)'
 
-julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-sysimg-ji julia-src-%
-	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
+#julia-sysimg-release julia-sysimg-debug : julia-sysimg-% : julia-sysimg-ji julia-src-%
+#	@$(MAKE) $(QUIET_MAKE) -C $(BUILDROOT) -f sysimage.mk sysimg-$*
 
 julia-debug julia-release : julia-% : julia-sysimg-% julia-src-% julia-symlink julia-libccalltest julia-libllvmcalltest julia-base-cache
 julia-noimage-release julia-noimage-debug: julia-noimage-% : julia-src-% julia-symlink julia-libccalltest julia-libllvmcalltest

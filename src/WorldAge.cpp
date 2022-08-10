@@ -124,8 +124,14 @@ class WorldLattice{
         return Uncomparable;
     }
     Cmp Ordering(const PrimitiveWorld& w1, const PrimitiveWorld& w2){
-        assert(worldRelation.find(w1) != worldRelation.end());
-        assert(worldRelation.find(w2) != worldRelation.end());
+        if (worldRelation.find(w1) == worldRelation.end()){
+            jl_(w2.JLModule);
+            jl_error("World not existed");
+        }
+        if (worldRelation.find(w2) == worldRelation.end()){
+            jl_(w2.JLModule);
+            jl_error("World not existed");
+        }
         if (w1.JLModule == w2.JLModule){
             return Eq;
         }

@@ -106,7 +106,8 @@ CachedMethodInstanceNode *CacheGraph::createPatchedMethodInstanceNode(std::strin
     }
     else{
         // This should be checked before
-        assert(0);
+        llvm::errs() << "Cached node is already existed" << miName;
+        exit(1);
     }
 }
 
@@ -169,8 +170,8 @@ void CacheGraph::emitJITMethodInstanceNode(JITMethodInstanceNode *jitNode)
     llvm::Module *mod = jitNode->mod.get();
     bool isRelocatable = jitNode->isRelocatable;
     jit->removeUnusedExternal(mod);
-    if (!isRelocatable) {
-        llvm::errs() << "Non relocatable function:" << miName << '\n';
+    if (!isRelocatable && jl_is_method(jitNode->mi->def.value)) {
+        // llvm::errs() << "Non relocatable function:" << miName << '\n';
     }
     if (!jitNode->isToplevel){
         jitNode->unOptIRFilePath = jit->writeOutput(mod, miName, UnoptIR);
@@ -196,7 +197,10 @@ void CacheGraph::emitJITMethodInstanceNode(JITMethodInstanceNode *jitNode)
         jl_error("Unable to create object files!");
     }
     jitNode->buffer = std::move(ObjBuffer);
-    assert(!jit->addJITObject(jitNode, jit->JuliaFuncJD));
+    llvm::Error err = jit->addJITObject(jitNode, jit->JuliaFuncJD);
+    if (err){
+        llvm::errs() << "Failed to add JIT Object";
+    }
     // TODO : we should set it at some other place...
     jitNode->state = Done;
 }
@@ -234,7 +238,7 @@ void CacheGraph::emitMethodInstanceNodes(MethodInstanceNodeSet &reachableSet)
         MethodInstanceNode *n = *i;
         std::string fname = "julia::method::invoke::";
         llvm::raw_string_ostream(fname) << n->miName;
-        assert(jit->tryLookupSymbol(fname));
+        llvm::cantFail(jit->tryLookupSymbol(fname));
     }
 }
 
@@ -248,17 +252,23 @@ void CacheGraph::addDependency(std::string miName, const std::string &gvName,
                                const std::string &code)
 {
     auto iter = miNodeMap.find(miName);
-    assert(iter != miNodeMap.end());
     // Since we support loading of invalidated function, so it's possible that we can add symbol to unemitted cache object
     // TODO : merge the code into one ??
+    if (iter == miNodeMap.end()){
+        llvm::errs() << "Method instance is not cached!\n" << miName << '\n';
+        abort();
+    }
     if (JITMethodInstanceNode *jitNode = dyn_cast<JITMethodInstanceNode>(iter->second)) {
         auto iter2 = jitNode->symbolTable.find(gvName);
         if (iter2 != jitNode->symbolTable.end()) {
             if (iter2->second != code) {
+                /*
+                TODO : we currently disable it because it cause too many errors
                 assert(0);
                 llvm::errs() << "Inconsistent code for the same symbols" << gvName << '\n';
                 llvm::errs() << "\tPrevious value: " << iter2->second << '\n';
                 llvm::errs() << "\tCurrent value: " << code << '\n';
+                */
             }
         }
         else{
@@ -292,9 +302,13 @@ void CacheGraph::markMethodInstanceAsNonRelocatable(jl_method_instance_t *mi)
         jitNode->isRelocatable = false;
     }
     else if (CachedMethodInstanceNode *cacheNode = dyn_cast<CachedMethodInstanceNode>(miNode)){
-        assert(!cacheNode->hasEmitted());
+        if (cacheNode->hasEmitted()){
+            llvm::errs() << "This cached node should not have emitted already" << jl_name_from_method_instance(mi);
+            exit(1);
+        }
     }
     else{
+        exit(1);
         assert(0);
     }
 }

@@ -37,6 +37,8 @@ using namespace llvm::jitlink;
 #include <functional>
 #include <iostream>
 #include <string>
+#include <mutex>
+#include "llvm/Support/Timer.h"
 
 StaticJuliaJIT *jl_StaticJuliaJIT = nullptr;
 extern "C" JL_DLLEXPORT void *(*jl_staticjit_get_cache)(jl_method_instance_t *, size_t);
@@ -84,8 +86,12 @@ StaticJuliaJIT::StaticJuliaJIT()
     obj_OS(obj_Buffer),
     PM(),
     ES(),
+    #if UseJITLink
     Memgr(),
     ObjectLayer(this, ES, Memgr),
+    #else
+    ObjectLayer(ES, []() { return std::make_unique<SectionMemoryManager>(); }),
+    #endif
     // deal with external name of julia.XXX.XXX
     // collect all the symbols of added object file
     JuliaFuncJD(ES.createBareJITDylib("JuliaFuncJD")),
@@ -162,7 +168,7 @@ Error StaticJuliaJIT::addJITObject(JITMethodInstanceNode *jitNode, JITDylib &lib
     */
     // Implicitly merge of symbol table, which might be bad
     generator->registerDependencies(/* m ,*/jitNode->symbolTable);
-    return addObjectInternal(ObjectLayer, lib,
+    return addObjectInternal(ES, ObjectLayer, lib,
                              std::unique_ptr<JuliaObjectFile>(new JuliaObjectFile(
                                  nullptr, /* dep, */ std::move(jitNode->buffer))));
 };
@@ -172,7 +178,7 @@ Error StaticJuliaJIT::addCachedObject(CachedMethodInstanceNode *cacheNode, JITDy
     assert(!cacheNode->hasEmitted());
     cacheNode->setEmitted();
     generator->registerDependencies(/* m ,*/ std::move(cacheNode->symbolTable));
-    return addObjectInternal(ObjectLayer, lib,
+    return addObjectInternal(ES, ObjectLayer, lib,
                              // Currently JL_Module unused, should be fine
                              std::unique_ptr<JuliaObjectFile>(new JuliaObjectFile(
                                  nullptr, /* dep, */ std::move(cacheNode->buffer))));
@@ -195,8 +201,29 @@ llvm::Expected<void *> StaticJuliaJIT::tryLookupSymbol(std::string &name)
         return (void *)addr;
     }
     else {
-        assert(JuliaFuncJD.remove({namerefptr}));
+        cantFail(JuliaFuncJD.remove({namerefptr}));
         return Err;
+    }
+}
+
+// This function is used to debug things
+void* StaticJuliaJIT::probeDebugSymbol(std::string &name)
+{
+    SymbolStringPtr namerefptr = ES.intern(StringRef(name));
+    auto symOrErr = ES.lookup({&JuliaFuncJD}, namerefptr);
+    auto Err = symOrErr.takeError();
+    // In our new implementation, err can only happen when symbol resolution has error
+    // That is, maybe our symbol table is error.
+    // Let's ignore this now (TODO : make error more robust)
+    // The essential problem here is that we don't know how LLVM handle symbol resolution
+    // error.
+    if (!Err) {
+        auto addr = symOrErr.get().getAddress();
+        has_emitted[addr] = name;
+        return (void *)addr;
+    }
+    else {
+        return nullptr;
     }
 }
 
@@ -265,7 +292,7 @@ static jl_code_instance_t *jl_unique_rettype_inferred(jl_method_instance_t *mi,
                 // if we already find a code instance. Raise a warning
                 if (ci != NULL) {
                     jl_safe_printf(
-                        "Warning: More than one matched code instance! (maybe some bootstraped code?)");
+                        "Warning: More than one matched code instance! (maybe some bootstraped code?)\n");
                     // jl_(ci);
                     // jl_(codeinst);
                 }
@@ -317,7 +344,7 @@ static jl_code_instance_t *prepare_code_instance(jl_method_instance_t *mi, size_
     JL_GC_POP();
     return lookup_codeinst;
 }
-
+extern void clearGlobalRefs();
 void StaticJuliaJIT::compileMethodInstancePatched(jl_method_instance_t* mi, CachedMethodInstanceNode* cacheNode, size_t world)
 {
     assert(!cacheNode->hasEmitted());
@@ -337,8 +364,10 @@ void StaticJuliaJIT::compileMethodInstancePatched(jl_method_instance_t* mi, Cach
     // prevent Julia uses cache internally
     params.cache = false;
     params.world = world;
+    clearGlobalRefs();
     jl_compile_result_t result =
         emit_function(mi, (jl_code_info_t *)src, ci->rettype, params);
+    clearGlobalRefs();
     JL_GC_POP();
     std::unique_ptr<llvm::Module> mod = std::move(std::get<0>(result));
     removeUnusedExternal(mod.get());
@@ -351,7 +380,7 @@ void StaticJuliaJIT::compileMethodInstancePatched(jl_method_instance_t* mi, Cach
         new SmallVectorMemoryBuffer(std::move(emptyBuffer)));
     cacheNode->buffer = std::move(ObjBuffer);
     assert(cacheNode->symbolTable);
-    assert(!addCachedObject(cacheNode, JuliaFuncJD));
+    cantFail(addCachedObject(cacheNode, JuliaFuncJD));
 }
 
 void StaticJuliaJIT::compileMethodInstanceCached(jl_method_instance_t *mi, size_t world,
@@ -392,8 +421,10 @@ void StaticJuliaJIT::compileMethodInstanceCached(jl_method_instance_t *mi, size_
     // prevent Julia uses cache internally
     params.cache = false;
     params.world = world;
+    clearGlobalRefs();
     jl_compile_result_t result =
         emit_function(mi, (jl_code_info_t *)src, ci->rettype, params);
+    clearGlobalRefs();
     JL_GC_POP();
     assert(std::get<0>(result));
     cacheGraph.installCompiledOutput(miNode, std::move(std::get<0>(result)));
@@ -665,7 +696,14 @@ void StaticJuliaJIT::addStaticLib(std::string libPath, std::vector<JuliaLibConfi
                 // already compiled, do nothing here
                 continue;
             }
-            assert(config.mi != nullptr);
+            std::string newName = jl_name_from_method_instance(config.mi);
+            if (config.miName != newName){
+                llvm::errs() << "Inconsistent name for : \n";
+                llvm::errs() << "Compiled as : " << config.miName << '\n';
+                llvm::errs() << "Regenerated as : " << newName << '\n';
+                //abort();
+            }
+            llvm::errs() << "Recompile non relocatable" << config.miName << "\n";
             auto cacheNode = cacheGraph.createPatchedMethodInstanceNode(config.miName, libPath, config.objFileName);
             compileMethodInstancePatched(config.mi, cacheNode, jl_world_counter);
         }
@@ -689,7 +727,7 @@ void StaticJuliaJIT::addStaticLib(std::string libPath, std::vector<JuliaLibConfi
             auto cacheNode = cacheGraph.createUnemittedCachedMethodInstanceNode(
                 config.miName, libPath, iter->first, std::move(config.externalSymbols),
                 std::move(membuf));
-            assert(!addCachedObject(cacheNode, JuliaFuncJD));
+            cantFail(addCachedObject(cacheNode, JuliaFuncJD));
         }
     }
 }
@@ -744,7 +782,7 @@ std::vector<JuliaLibConfig> openConfig(std::string path)
                 std::getline(fs, typeString);
                 jl_value_t **args;
                 JL_GC_PUSHARGS(args, 3);
-                args[0] = jl_atomic_load_relaxed(&(jl_get_binding(jl_main_module, jl_symbol("lookUpMethodInstance"))->value));
+                args[0] = jl_eval_string("BuildSystem.lookUpMethodInstance");
                 args[1] = (jl_value_t *)decodeJuliaValue(jl_main_module, typeString);
                 args[2] = jl_box_uint64(jl_world_counter);
                 mi = jl_apply(args, 3);
@@ -809,7 +847,11 @@ extern "C" JL_DLLEXPORT void jl_add_static_libs(jl_value_t *objectfilearray)
         std::string libPath = jl_string_ptr(jl_fieldref(item, 0));
         std::string configPath = jl_string_ptr(jl_fieldref(item, 1));
         std::vector<JuliaLibConfig> configs = openConfig(configPath);
+        // Timer timer;
+        // timer.init(StringRef(libPath), StringRef(libPath));
+        // timer.startTimer();
         jl_StaticJuliaJIT->addStaticLib(libPath, configs);
+        // timer.stopTimer();
     }
 }
 
@@ -830,24 +872,41 @@ std::map<jl_method_instance_t *, uint64_t> miPool;
 extern "C" JL_DLLEXPORT void *jl_force_jit(jl_method_instance_t *mi, size_t world)
 {
     // toplevel method instance should not be cached
+    jl_sigatomic_begin();
+    JL_LOCK(&jl_codegen_lock);
     bool isToplevel = !jl_is_method(mi->def.method);
     // We use a simple cache to accelerate function calling, which is of course
     // memory-inefficient. But since most method instance can be compiled, so it would be
     // relatively rare to get into this branch.
     auto iter = miPool.find(mi);
     if (iter != miPool.end()) {
+        JL_UNLOCK(&jl_codegen_lock);
+        jl_sigatomic_end();
         return (void *)iter->second;
     }
     if (jl_StaticJuliaJIT->inCompiling) {
+        // llvm::errs() << "Codegen lock is held by only one task, this should not happen!\n";
+        // jl_(mi);
+        // abort();
+        JL_UNLOCK(&jl_codegen_lock);
+        jl_sigatomic_end();
         return nullptr;
     }
     jl_StaticJuliaJIT->inCompiling = true;
     llvm::Expected<void *> ptr = jl_StaticJuliaJIT->getInvokePointer(mi, world);
-    assert(ptr);
     jl_StaticJuliaJIT->inCompiling = false;
+    if (!ptr){
+        llvm::errs() << jl_name_from_method_instance(mi) << "Failed name lookup procedure.";
+        exit(1);
+    }
     if (!isToplevel) {
         miPool[mi] = (uint64_t)*ptr;
     }
+    if (*ptr == NULL){
+        abort();
+    }
+    JL_UNLOCK(&jl_codegen_lock);
+    jl_sigatomic_end();
     return *ptr;
 }
 
@@ -923,9 +982,9 @@ void lookup_address(uint64_t addr)
         if (startsWith(KV.second, "julia::method::invoke::")) {
             std::string specName = "julia::method::specfunc::";
             specName += KV.second.substr(strlen("julia::method::invoke::"));
-            llvm::Expected<void *> result = jl_StaticJuliaJIT->tryLookupSymbol(specName);
+            void* result = jl_StaticJuliaJIT->probeDebugSymbol(specName);
             if (result) {
-                has_emitted_specfunc[(uint64_t)*result] = specName;
+                has_emitted_specfunc[(uint64_t)result] = specName;
             }
         }
         has_emitted_specfunc[KV.first] = KV.second;
@@ -991,12 +1050,22 @@ extern "C" JL_DLLEXPORT void jl_set_debug_stream(jl_value_t *path)
     std::error_code ec;
     assert(jl_is_string(path));
     internal_debug_stream = new llvm::raw_fd_ostream(StringRef(jl_string_ptr(path)), ec);
-    // jl_printf(JL_STDOUT,ec.message().c_str());
-    if (ec) {
-        jl_printf(JL_STDOUT, "Unable to open debug stream, check whether you do it right!");
+    return;
+}
+extern "C" JL_DLLEXPORT void (*jl_preload_binary_handler)(jl_module_t*);
+extern "C" JL_DLLEXPORT void jl_preload_binary(jl_module_t* m){
+    jl_binding_t* bnd = jl_get_binding(jl_main_module, jl_symbol("jl_preload_handler"));
+    if (bnd == nullptr){
         abort();
     }
-    return;
+    jl_value_t* f = jl_atomic_load_acquire(&(bnd->value));
+    if (f != nullptr){
+        (void)jl_apply_generic(f, (jl_value_t**)&(m->name), 1);
+    }
+}
+
+extern "C" JL_DLLEXPORT void jl_set_preload_binary_handler(){
+    jl_preload_binary_handler = jl_preload_binary;
 }
 /*
 extern "C" JL_DLLEXPORT void jl_invalidate(jl_value_t* mi)
@@ -1038,8 +1107,9 @@ void makeSafe(std::string &s)
 {
     char *ptr = &s[0];
     for (size_t i = 0; i < s.size(); i++) {
-        if (ptr[i] == '\0') {
-            ptr[i] = '\1';
+        char c = ptr[i];
+        if (c == '\0' || c == '@' || c == '\\' || c == '/') {
+            ptr[i] = '_';
         }
     }
 }
@@ -1051,12 +1121,38 @@ void makeSafe(std::string &s)
    TODO : make the name really really correct !!!!!
 */
 // defined in JuliaValueCoder.cpp
+bool checkRelocatable(jl_method_instance_t *mi){
+    auto miNode = jl_StaticJuliaJIT->cacheGraph.lookUpNode(mi);
+    if (JITMethodInstanceNode *jitNode = dyn_cast<JITMethodInstanceNode>(miNode)){
+        return jitNode->isRelocatable;
+    }
+    else if (CachedMethodInstanceNode *cacheNode = dyn_cast<CachedMethodInstanceNode>(miNode)){
+        if (cacheNode->hasEmitted()){
+            llvm::errs() << "This cached node should not have emitted already" << jl_name_from_method_instance(mi);
+            abort();
+        }
+        else{
+            // conservatively mark as relocatable
+            return true;
+        }
+    }
+    else{
+        abort();
+    }
+}
+
 extern jl_binding_t* tryGetGlobalRef(jl_value_t* v);
 void registerExternalValue(jl_method_instance_t *mi, jl_value_t *v, std::string &llvmName,
                            jl_binding_t *bnd)
 {
-    bool needInvalidated = false;
-    const std::string &tmp = encodeJuliaValue(v, needInvalidated, bnd);
+    bool needInvalidated = !jl_is_method(mi->def.value);
+    std::string tmp = "";
+    // fast path, it one 
+    if (checkRelocatable(mi) && !needInvalidated){
+        tmp = encodeJuliaValue(v, needInvalidated, bnd);
+    }else{
+        needInvalidated = true;
+    }
     if (needInvalidated) {
         jl_StaticJuliaJIT->cacheGraph.markMethodInstanceAsNonRelocatable(mi);
         llvmName = "jlptr::";
@@ -1138,9 +1234,9 @@ jl_value_t* convertStdStringToJLString(const std::string& s){
 class DumpGraphHelper{
     public:
     DumpGraphHelper(StaticJuliaJIT* jit, jl_array_t* nodeArray) : jit(jit), nodeArray(nodeArray) {
-        j_jitNode_ty = (jl_datatype_t*)jl_eval_string("JITMethodInstance");
-        j_cacheNode_ty = (jl_datatype_t*)jl_eval_string("CachedMethodInstance");
-        j_pluginNode_ty = (jl_datatype_t*)jl_eval_string("PluginMethodInstance");
+        j_jitNode_ty = (jl_datatype_t*)jl_eval_string("BuildSystem.JITMethodInstance");
+        j_cacheNode_ty = (jl_datatype_t*)jl_eval_string("BuildSystem.CachedMethodInstance");
+        j_pluginNode_ty = (jl_datatype_t*)jl_eval_string("BuildSystem.PluginMethodInstance");
     };
     jl_array_t* dumpGraph(){
         auto& graph = jit->cacheGraph;

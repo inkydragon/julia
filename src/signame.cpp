@@ -427,7 +427,7 @@ extern "C" JL_DLLEXPORT void jl_datatype_to_string(std::stringstream &out, jl_va
     else if (v == (jl_value_t*)jl_any_type) {
         out << "Any";
     }
-    else if (v == (jl_value_t*)jl_type_type) {
+    else if (!jl_is_vararg(v) && jl_types_equal(v, (jl_value_t*)jl_type_type)) {
         out << "Type";
     }
     /*

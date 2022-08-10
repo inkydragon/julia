@@ -28,11 +28,10 @@
 *.jl.mem
 *.jl.*.mem
 *.ji
+*.a 
 
 /perf*
 .DS_Store
 .idea/*
 .vscode/*
-BuildSystem/test/objs
-BuildSystem/tool
-src/dyncall
+.history/*

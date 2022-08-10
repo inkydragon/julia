@@ -24,8 +24,15 @@ enum JLTypeTag : uint16_t {
     JL_NEW_UNIONALL,
     JL_SINGLETON,
     JL_NEW_VARARG,
+    JL_EXPR, // We have to use this to encode Expression, otherwise many things are left uncompiled
+    JL_REGEX, // special support to enable more codes cache...
     JL_BND // return a jl_binding_t*, cannot used in normal evaluation
 };
+void assertAbort(bool i){
+    if (!(i)){
+        abort();
+    }
+} 
 
 uint8_t hex2uint8(char h)
 {
@@ -48,7 +55,7 @@ char uint82hex(uint8_t u)
 
 std::vector<uint8_t> decodeStringAsBytes(std::string &str)
 {
-    assert(str.size() % 2 == 0);
+    assertAbort(str.size() % 2 == 0);
     std::vector<uint8_t> bytes(str.size() / 2);
     for (size_t i = 0; i < str.size() / 2; i++) {
         // little endianness
@@ -199,6 +206,21 @@ public:
     }
 };
 
+static jl_value_t* initRegex(){
+    jl_value_t* regexType = nullptr;
+    if (jl_base_module != NULL){
+        jl_binding_t* bnd = jl_get_binding(jl_base_module, jl_symbol("Regex"));
+        if (bnd != nullptr){
+            regexType = jl_atomic_load(&(bnd->value));
+        }
+    }
+    return regexType;
+}
+
+JuliaValueEncoder::JuliaValueEncoder() {
+    regexType = initRegex();
+}
+
 SSAId JuliaValueEncoder::encodeSymbolAsBytes(jl_sym_t *sym)
 {
     const char *str = jl_symbol_name_(sym);
@@ -220,7 +242,7 @@ SSAId JuliaValueEncoder::encodeSymbolAsBytes(jl_sym_t *sym)
 
 SSAId JuliaValueEncoder::encodeJLStringAsBytes(jl_value_t *jlstr)
 {
-    assert(jl_is_string(jlstr));
+    assertAbort(jl_is_string(jlstr));
     const char *str = jl_string_ptr(jlstr);
     size_t bytenum = jl_string_len(jlstr) + 1;
     SSAValues.emplace_back();
@@ -249,7 +271,7 @@ SSAId JuliaValueEncoder::encodeBindingInternal(jl_module_t *mod, jl_sym_t *sym,
         SSAId modSSAId = encodeSymbolAsBytes((*i)->name);
         modIds.push_back(modSSAId);
     }
-    assert(modIds.size() == mods.size());
+    assertAbort(modIds.size() == mods.size());
     SSAId nameSSAId = encodeSymbolAsBytes(sym);
     SSAValues.emplace_back();
     auto &result = SSAValues.back();
@@ -281,7 +303,7 @@ SSAId JuliaValueEncoder::encodeBinding(jl_module_t *mod, jl_sym_t *sym)
 
 SSAId JuliaValueEncoder::encodeSingleton(jl_value_t *v)
 {
-    assert(jl_is_datatype_singleton((jl_datatype_t *)jl_typeof(v)));
+    assertAbort(jl_is_datatype_singleton((jl_datatype_t *)jl_typeof(v)));
     SSAId typeId = encodeDataType((jl_datatype_t *)(jl_typeof(v)));
     SSAValues.emplace_back();
     auto &result = SSAValues.back();
@@ -347,7 +369,7 @@ SSAId JuliaValueEncoder::encodeRuntimePtr(jl_value_t *v)
 
 SSAId JuliaValueEncoder::encodeImmutable(jl_value_t *v)
 {
-    assert(jl_is_immutable_datatype(jl_typeof(v)) && !jl_is_primitivetype(jl_typeof(v)));
+    assertAbort(jl_is_immutable_datatype(jl_typeof(v)) && !jl_is_primitivetype(jl_typeof(v)));
     jl_datatype_t *dt = (jl_datatype_t *)jl_typeof(v);
     size_t nfield = jl_datatype_nfields(dt);
     SSAArray fieldIds;
@@ -373,7 +395,7 @@ SSAId JuliaValueEncoder::encodeImmutable(jl_value_t *v)
 
 SSAId JuliaValueEncoder::encodePrimitive(jl_value_t *v)
 {
-    assert(jl_is_primitivetype(jl_typeof(v)));
+    assertAbort(jl_is_primitivetype(jl_typeof(v)));
     jl_datatype_t *dt = (jl_datatype_t *)(jl_typeof(v));
     SSAId typeId = encodeDataType(dt);
     size_t bytesize = jl_datatype_size(dt);
@@ -449,7 +471,7 @@ SSAId JuliaValueEncoder::encodeTypeVar(jl_tvar_t *tvar, bool isDef)
 }
 SSAId JuliaValueEncoder::encodeUnionAll(jl_value_t *v)
 {
-    assert(jl_is_unionall(v));
+    assertAbort(jl_is_unionall(v));
     SSAArray typeVarIds;
     while (jl_is_unionall(v)) {
         jl_unionall_t *uv = (jl_unionall_t *)v;
@@ -488,7 +510,7 @@ void JuliaValueEncoder::collectUnionComponent(SmallJLValueArray &arr, jl_value_t
 }
 SSAId JuliaValueEncoder::encodeUnion(jl_value_t *v)
 {
-    assert(jl_is_uniontype(v));
+    assertAbort(jl_is_uniontype(v));
     SmallJLValueArray arr;
     collectUnionComponent(arr, v);
     SSAArray cIds;
@@ -538,11 +560,60 @@ SSAId JuliaValueEncoder::encodeVararg(jl_value_t *v)
     os << NId;
     return SSAValues.size() - 1;
 }
+
+SSAId JuliaValueEncoder::encodeExpr(jl_value_t* v){
+    assertAbort(jl_is_expr(v));
+    jl_expr_t* ex = (jl_expr_t*)v;
+    SSAId headId = encodeJuliaValue((jl_value_t*)(ex->head));
+    SSAArray paramIDs;
+    size_t len = jl_expr_nargs(ex);
+    for (size_t i = 0; i < len; i++) {
+        jl_value_t *param = jl_arrayref(ex->args, i);
+        paramIDs.push_back(encodeJuliaValue(param));
+    }
+    // llvm::raw_string_ostream(llvmName) << '}';
+    SSAValues.emplace_back();
+    auto &result = SSAValues.back();
+    RawByteStream os(result);
+    os << (uint16_t)JL_EXPR << uint8_t(1) << uint8_t(0)
+       << (uint32_t)(sizeof(SSAId) * (paramIDs.size() + 1));
+    os << headId;
+    os << paramIDs;
+    return SSAValues.size() - 1;
+
+}
+
+SSAId JuliaValueEncoder::encodeRegex(jl_value_t *v){
+    if (regexType == nullptr){
+        return encodeRuntimePtr(v);
+    }
+    jl_value_t* jlstr = jl_fieldref_noalloc(v, 0);
+    assertAbort(jl_is_string(jlstr));
+    const char *str = jl_string_ptr(jlstr);
+    size_t bytenum = jl_string_len(jlstr) + 1;
+    SSAValues.emplace_back();
+    auto &result = SSAValues.back();
+    RawByteStream os(result);
+    uint32_t compile_options = jl_unbox_uint32(jl_get_nth_field_checked(v, 1));
+    uint32_t match_options = jl_unbox_uint32(jl_get_nth_field_checked(v, 2));
+    os << (uint16_t)JL_REGEX << uint8_t(1) << uint8_t(0) << (uint32_t)(bytenum + 4 + 4);
+    os.write((uint8_t *)str, bytenum);
+    os << compile_options;
+    os << match_options;
+    return SSAValues.size() - 1;
+}
+
 SSAId JuliaValueEncoder::encodeJuliaValue(jl_value_t *v)
 {
     if (jl_typeof(v) == (jl_value_t *)jl_module_type) {
         jl_module_t *m = (jl_module_t *)v;
         return encodeBinding(m->parent, m->name);
+    }
+    else if (jl_typeof(v) == regexType){
+        return encodeRegex(v);
+    }
+    else if (jl_is_expr(v)){
+        return encodeExpr(v);
     }
     else if (v == (jl_value_t *)jl_bottom_type) {
         return encodePureTag(JL_BOTTOM);
@@ -603,7 +674,8 @@ SSAId JuliaValueEncoder::encodeJuliaValue(jl_value_t *v)
     else if (jl_is_mutable_datatype(jl_typeof(v))) {
         return encodeRuntimePtr(v);
     }
-    assert(0);
+    assertAbort(0);
+    abort();
 }
 extern std::string juliaValueToString(jl_value_t *v);
 std::string JuliaValueEncoder::encodeExternalJuliaValue(jl_value_t *v)
@@ -648,6 +720,12 @@ jl_binding_t* tryGetGlobalRef(jl_value_t* v){
         return nullptr;
     }
 }
+
+// used in StaticJIT.cpp
+void clearGlobalRefs(){
+    JuliaValueEncoder::bindings.clear();
+}
+
 std::string encodeJuliaValue(jl_value_t *v, bool &needInvalidated, jl_binding_t *bnd)
 {
     JuliaValueEncoder encoder;
@@ -673,7 +751,9 @@ JuliaValueDecoder::JuliaValueDecoder(jl_module_t *mod, jl_array_t *rootArray,
     SSAValues(rootArray),
     bytes(decodeStringAsBytes(str)),
     reader(llvm::StringRef((const char *)bytes.data(), bytes.size()),
-           llvm::support::endian::system_endianness()){};
+           llvm::support::endian::system_endianness()){
+    regexType = initRegex();
+};
 
 jl_vararg_t *jl_wrap_vararg(jl_value_t *t, jl_value_t *n)
 {
@@ -716,6 +796,19 @@ extern "C" JL_DLLEXPORT void jl_set_register_module_handle(){
     jl_register_module = jl_register_module_impl;
 }
 
+jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
+{
+    jl_task_t *ct = jl_current_task;
+    jl_array_t *ar = jl_alloc_vec_any(n);
+    JL_GC_PUSH1(&ar);
+    jl_expr_t *ex = (jl_expr_t*)jl_gc_alloc(ct->ptls, sizeof(jl_expr_t),
+                                            jl_expr_type);
+    ex->head = head;
+    ex->args = ar;
+    JL_GC_POP();
+    return ex;
+}
+
 void *JuliaValueDecoder::decodeJuliaValue()
 {
     JLTypeTag tag;
@@ -724,20 +817,20 @@ void *JuliaValueDecoder::decodeJuliaValue()
     uint8_t hasChild;
     SSAId i = 0;
     while (!reader.empty()) {
-        assert(reader.bytesRemaining() >= 4);
-        assert(!reader.readInteger(tagValue));
+        assertAbort(reader.bytesRemaining() >= 4);
+        assertAbort(!reader.readInteger(tagValue));
         tag = (JLTypeTag)tagValue;
-        assert(!reader.readInteger(isInline));
-        assert(!reader.readInteger(hasChild));
-        assert(hasChild == 0);
+        assertAbort(!reader.readInteger(isInline));
+        assertAbort(!reader.readInteger(hasChild));
+        assertAbort(hasChild == 0);
         uint32_t bytenum = 0;
         if (isInline) {
-            assert(reader.bytesRemaining() >= 4);
-            assert(!reader.readInteger(bytenum));
-            assert(reader.bytesRemaining() >= bytenum);
+            assertAbort(reader.bytesRemaining() >= 4);
+            assertAbort(!reader.readInteger(bytenum));
+            assertAbort(reader.bytesRemaining() >= bytenum);
         }
         switch (tag) {
-        case (JL_CONST): assert(0); break;
+        case (JL_CONST): assertAbort(0); break;
         case (JL_BOTTOM):
             jl_array_ptr_1d_push(SSAValues, (jl_value_t *)jl_bottom_type);
             break;
@@ -764,26 +857,26 @@ void *JuliaValueDecoder::decodeJuliaValue()
         case (JL_NAMED_TUPLE):
             jl_array_ptr_1d_push(SSAValues, (jl_value_t *)jl_namedtuple_type);
             break;
-        case (JL_INLINE): assert(0); break;
+        case (JL_INLINE): assertAbort(0); break;
         case (JL_SYMBOL): {
-            assert(isInline);
+            assertAbort(isInline);
             llvm::ArrayRef<uint8_t> Bytes;
             jl_value_t *result = nullptr;
             JL_GC_PUSH1(&result);
-            assert(!reader.readBytes(Bytes, bytenum));
-            assert(Bytes.back() == '\0');
+            assertAbort(!reader.readBytes(Bytes, bytenum));
+            assertAbort(Bytes.back() == '\0');
             result = (jl_value_t *)jl_symbol((const char *)Bytes.data());
             jl_array_ptr_1d_push(SSAValues, result);
             JL_GC_POP();
             break;
         }
         case (JL_STRING): {
-            assert(isInline);
+            assertAbort(isInline);
             llvm::ArrayRef<uint8_t> Bytes;
             jl_value_t *result = nullptr;
             JL_GC_PUSH1(&result);
-            assert(!reader.readBytes(Bytes, bytenum));
-            assert(Bytes.back() == '\0');
+            assertAbort(!reader.readBytes(Bytes, bytenum));
+            assertAbort(Bytes.back() == '\0');
             result = jl_pchar_to_string((const char *)Bytes.data(), Bytes.size() - 1);
             jl_array_ptr_1d_push(SSAValues, result);
             JL_GC_POP();
@@ -791,42 +884,42 @@ void *JuliaValueDecoder::decodeJuliaValue()
         }
         case (JL_PTR): {
             uint64_t ptrint;
-            assert(!reader.readInteger(ptrint));
+            assertAbort(!reader.readInteger(ptrint));
             jl_array_ptr_1d_push(SSAValues, (jl_value_t *)ptrint);
             isRelocatable = false;
             break;
         }
         case (JL_TYPENAME): {
             SSAId typeId;
-            assert(!reader.readInteger(typeId));
+            assertAbort(!reader.readInteger(typeId));
             jl_value_t *t = evalSSA(typeId);
             jl_typename_t *tname;
             if (jl_is_datatype(t)) {
                 tname = ((jl_datatype_t *)t)->name;
             }
             else {
-                assert(jl_is_unionall(t));
+                assertAbort(jl_is_unionall(t));
                 while (jl_is_unionall(t)) {
                     t = ((jl_unionall_t *)t)->body;
                 }
-                assert(jl_is_datatype(t));
+                assertAbort(jl_is_datatype(t));
                 tname = ((jl_datatype_t *)t)->name;
             }
             jl_array_ptr_1d_push(SSAValues, (jl_value_t *)tname);
             break;
         }
-        case (JL_FUNCTION): assert(0); break;
+        case (JL_FUNCTION): assertAbort(0); break;
         case (JL_GLOBAL_REF): {
             llvm::ArrayRef<uint8_t> Bytes;
-            assert(!reader.readBytes(Bytes, bytenum));
+            assertAbort(!reader.readBytes(Bytes, bytenum));
             size_t SSAnum = bytenum / sizeof(SSAId);
-            assert(bytenum % sizeof(SSAId) == 0);
+            assertAbort(bytenum % sizeof(SSAId) == 0);
             llvm::ArrayRef<SSAId> params((SSAId *)Bytes.data(), SSAnum);
             jl_module_t *rootModule = JLModule;
             jl_value_t *result = nullptr;
-            assert(params.size() >= 1);
+            assertAbort(params.size() >= 1);
             jl_value_t *rootModuleSymbol_ = evalSSA(params[0]);
-            assert(jl_is_symbol(rootModuleSymbol_));
+            assertAbort(jl_is_symbol(rootModuleSymbol_));
             jl_sym_t *rootModuleSymbol = (jl_sym_t *)rootModuleSymbol_;
             std::string moduleName = (const char *)jl_symbol_name_(rootModuleSymbol);
             if (rootModuleSymbol == jl_symbol("Core")) {
@@ -846,7 +939,7 @@ void *JuliaValueDecoder::decodeJuliaValue()
             }
             for (size_t i = 0; i < params.size(); i++) {
                 jl_value_t *paramValue = evalSSA(params[i]);
-                assert(jl_is_symbol(paramValue));
+                assertAbort(jl_is_symbol(paramValue));
                 jl_value_t *tmp = nullptr;
                 jl_binding_t *bnd = jl_get_binding(rootModule, (jl_sym_t *)paramValue);
                 if (bnd == nullptr){
@@ -858,29 +951,30 @@ void *JuliaValueDecoder::decodeJuliaValue()
                     }
                     if (tmp == nullptr){
                         llvm::errs() << jl_symbol_name((jl_sym_t *)paramValue) << "doesn't exist";
-                        assert(0);
+                        assertAbort(0);
                     }
                 }
                 else{
                     tmp = jl_atomic_load(&(bnd->value));
+                    assertAbort(tmp);
                 }
                 if (i != params.size() - 1) {
-                    assert(jl_is_module(tmp));
+                    assertAbort(jl_is_module(tmp));
                     rootModule = (jl_module_t *)tmp;
                 }
                 else {
                     result = tmp;
                 }
             }
-            assert(result);
+            assertAbort(result);
             jl_array_ptr_1d_push(SSAValues, result);
             break;
         }
         case (JL_APPLY_TYPE): {
             llvm::ArrayRef<uint8_t> Bytes;
-            assert(!reader.readBytes(Bytes, bytenum));
+            assertAbort(!reader.readBytes(Bytes, bytenum));
             size_t SSAnum = bytenum / sizeof(SSAId);
-            assert(bytenum % sizeof(SSAId) == 0);
+            assertAbort(bytenum % sizeof(SSAId) == 0);
             llvm::ArrayRef<SSAId> params((SSAId *)Bytes.data(), SSAnum);
             // all parameters are rooted, so we don't need to re-root
             // notice that params also contain constructor
@@ -894,22 +988,22 @@ void *JuliaValueDecoder::decodeJuliaValue()
                                    paramValues.size() - 1);
             jl_array_ptr_1d_push(SSAValues, result);
             JL_GC_POP();
-            assert(result);
+            assertAbort(result);
             break;
         }
         case (JL_NEW_PRIMITIVE): {
             SSAId typeId;
-            assert(bytenum >= 1);
-            assert(!reader.readInteger(typeId));
+            assertAbort(bytenum >= 1);
+            assertAbort(!reader.readInteger(typeId));
             llvm::ArrayRef<uint8_t> Bytes;
             // We have read SSAId
             bytenum = bytenum - sizeof(SSAId);
-            assert(!reader.readBytes(Bytes, bytenum));
+            assertAbort(!reader.readBytes(Bytes, bytenum));
             jl_value_t *result = nullptr;
             JL_GC_PUSH1(&result);
             jl_value_t *_dt = evalSSA(typeId);
-            assert(jl_is_primitivetype(_dt));
-            assert((size_t)jl_datatype_size(_dt) == bytenum);
+            assertAbort(jl_is_primitivetype(_dt));
+            assertAbort((size_t)jl_datatype_size(_dt) == bytenum);
             result = jl_new_bits(_dt, Bytes.data());
             jl_array_ptr_1d_push(SSAValues, result);
             JL_GC_POP();
@@ -917,9 +1011,9 @@ void *JuliaValueDecoder::decodeJuliaValue()
         }
         case (JL_NEW_IMMUTABLE): {
             llvm::ArrayRef<uint8_t> Bytes;
-            assert(!reader.readBytes(Bytes, bytenum));
+            assertAbort(!reader.readBytes(Bytes, bytenum));
             size_t SSAnum = bytenum / sizeof(SSAId);
-            assert(bytenum % sizeof(SSAId) == 0);
+            assertAbort(bytenum % sizeof(SSAId) == 0);
             llvm::ArrayRef<SSAId> params((SSAId *)Bytes.data(), SSAnum);
             // all parameters are rooted, so we don't need to re-root
             // notice that params also contain constructor
@@ -933,18 +1027,18 @@ void *JuliaValueDecoder::decodeJuliaValue()
                                     &(paramValues.data()[1]), paramValues.size() - 1);
             jl_array_ptr_1d_push(SSAValues, result);
             JL_GC_POP();
-            assert(result);
+            assertAbort(result);
             break;
         }
         case (JL_NEW_TVAR): {
             SSAId nameid;
-            assert(!reader.readInteger(nameid));
+            assertAbort(!reader.readInteger(nameid));
             SSAId lbid;
-            assert(!reader.readInteger(lbid));
+            assertAbort(!reader.readInteger(lbid));
             SSAId upid;
-            assert(!reader.readInteger(upid));
+            assertAbort(!reader.readInteger(upid));
             jl_value_t *name = evalSSA(nameid);
-            assert(jl_is_symbol(name));
+            assertAbort(jl_is_symbol(name));
             jl_value_t *lb = evalSSA(lbid);
             jl_value_t *up = evalSSA(upid);
             jl_value_t *result = nullptr;
@@ -956,12 +1050,12 @@ void *JuliaValueDecoder::decodeJuliaValue()
         }
         case (JL_NEW_UNIONALL): {
             SSAId tvarid;
-            assert(!reader.readInteger(tvarid));
+            assertAbort(!reader.readInteger(tvarid));
             SSAId bodyid;
-            assert(!reader.readInteger(bodyid));
+            assertAbort(!reader.readInteger(bodyid));
             jl_value_t *tvar = evalSSA(tvarid);
             jl_value_t *body = evalSSA(bodyid);
-            assert(jl_is_typevar(tvar));
+            assertAbort(jl_is_typevar(tvar));
             jl_value_t *result = nullptr;
             JL_GC_PUSH1(&result);
             result = jl_type_unionall((jl_tvar_t *)tvar, body);
@@ -971,18 +1065,18 @@ void *JuliaValueDecoder::decodeJuliaValue()
         }
         case (JL_SINGLETON): {
             SSAId typeId;
-            assert(!reader.readInteger(typeId));
+            assertAbort(!reader.readInteger(typeId));
             jl_value_t *tmp = evalSSA(typeId);
-            assert(jl_is_datatype(tmp));
-            assert(((jl_datatype_t *)tmp)->instance);
+            assertAbort(jl_is_datatype(tmp));
+            assertAbort(((jl_datatype_t *)tmp)->instance);
             jl_array_ptr_1d_push(SSAValues, ((jl_datatype_t *)tmp)->instance);
             break;
         }
         case (JL_NEW_VARARG): {
             SSAId TId;
-            assert(!reader.readInteger(TId));
+            assertAbort(!reader.readInteger(TId));
             SSAId NId;
-            assert(!reader.readInteger(NId));
+            assertAbort(!reader.readInteger(NId));
             jl_value_t *T = nullptr;
             if (TId != ~(SSAId)0) {
                 T = evalSSA(TId);
@@ -999,18 +1093,61 @@ void *JuliaValueDecoder::decodeJuliaValue()
             JL_GC_POP();
             break;
         }
+        case (JL_EXPR) : {
+            llvm::ArrayRef<uint8_t> Bytes;
+            assertAbort(!reader.readBytes(Bytes, bytenum));
+            size_t SSAnum = bytenum / sizeof(SSAId);
+            assertAbort(bytenum % sizeof(SSAId) == 0);
+            llvm::ArrayRef<SSAId> params((SSAId *)Bytes.data(), SSAnum);
+            // all parameters are rooted, so we don't need to re-root
+            // notice that params also contain constructor
+            std::vector<jl_value_t *> paramValues(params.size());
+            for (size_t i = 0; i < params.size(); i++) {
+                paramValues[i] = evalSSA(params[i]);
+            }
+            jl_value_t *result = nullptr;
+            JL_GC_PUSH1(&result);
+            result = (jl_value_t*)jl_exprn((jl_sym_t*)paramValues[0], params.size() - 1);
+            for (size_t i = 0; i < params.size() - 1; i++) {
+                jl_exprargset(result, i, paramValues[i + 1]);
+            }
+            jl_array_ptr_1d_push(SSAValues, result);
+            JL_GC_POP();
+            assertAbort(result);
+            break;
+        }
+        case (JL_REGEX):{
+            assertAbort(isInline);
+            assertAbort(regexType != nullptr);
+            llvm::ArrayRef<uint8_t> Bytes;
+            jl_value_t** rtvars;
+            JL_GC_PUSHARGS(rtvars, 3);
+            assertAbort(!reader.readBytes(Bytes, bytenum - 4 - 4));
+            assertAbort(Bytes.back() == '\0');
+            rtvars[0] = jl_pchar_to_string((const char *)Bytes.data(), Bytes.size() - 1);
+            uint32_t compile_options;
+            uint32_t match_options;
+            assertAbort(!reader.readInteger(compile_options));
+            assertAbort(!reader.readInteger(match_options));
+            rtvars[1] = jl_box_uint32(compile_options);
+            rtvars[2] = jl_box_uint32(match_options);
+            jl_value_t* result = jl_apply_generic(regexType, rtvars, 3);
+            jl_array_ptr_1d_push(SSAValues, result);
+            JL_GC_POP();
+            break;
+        }
         default:
             if (tag == JL_BND) {
                 llvm::ArrayRef<uint8_t> Bytes;
-                assert(!reader.readBytes(Bytes, bytenum));
+                assertAbort(!reader.readBytes(Bytes, bytenum));
                 size_t SSAnum = bytenum / sizeof(SSAId);
-                assert(bytenum % sizeof(SSAId) == 0);
+                assertAbort(bytenum % sizeof(SSAId) == 0);
                 llvm::ArrayRef<SSAId> params((SSAId *)Bytes.data(), SSAnum);
                 jl_module_t *rootModule = JLModule;
-                assert(params.size() >= 1);
+                assertAbort(params.size() >= 1);
                 for (size_t i = 0; i < params.size(); i++) {
                     jl_value_t *paramValue = evalSSA(params[i]);
-                    assert(jl_is_symbol(paramValue));
+                    assertAbort(jl_is_symbol(paramValue));
                     jl_value_t* tmp = nullptr;
                     jl_binding_t *bnd = jl_get_binding(rootModule, (jl_sym_t *)paramValue);
                     if (bnd == nullptr){
@@ -1022,14 +1159,15 @@ void *JuliaValueDecoder::decodeJuliaValue()
                         }
                         if (tmp == nullptr){
                             llvm::errs() << jl_symbol_name((jl_sym_t *)paramValue) << "doesn't exist";
-                            assert(0);
+                            jl_(paramValue);
+                            abort();
                         }
                     }
                     else{
                         tmp = jl_atomic_load(&(bnd->value));
                     }
                     if (i != params.size() - 1) {
-                        assert(jl_is_module(tmp));
+                        assertAbort(jl_is_module(tmp));
                         rootModule = (jl_module_t *)tmp;
                     }
                     else {
@@ -1038,12 +1176,12 @@ void *JuliaValueDecoder::decodeJuliaValue()
                     }
                 }
             }
-            assert(0);
+            assertAbort(0);
             break;
         }
         i += 1;
     }
-    assert(jl_array_len(SSAValues) > 0);
+    assertAbort(jl_array_len(SSAValues) > 0);
     jl_value_t *result = jl_arrayref(SSAValues, jl_array_len(SSAValues) - 1);
     return result;
 }
@@ -1053,7 +1191,7 @@ std::string juliaValueToString(jl_value_t *v)
     ios_t os;
     ios_mem(&os, 100);
     int n = jl_static_show((uv_stream_t *)&os, v);
-    assert(os.bpos == n);
+    assertAbort(os.bpos == n);
     std::string str(os.buf, n);
     ios_close(&os);
     return str;
@@ -1112,22 +1250,30 @@ void *resolveExternJLValue(std::string s, std::string code,
     }
     else if (startsWith(s, "jlexpr::")) {
         jl_value_t *exprStr = (jl_value_t *)decodeJuliaValue(mod, code);
-        assert(jl_is_string(exprStr));
+        assertAbort(jl_is_string(exprStr));
         jl_value_t *expr = nullptr;
         jl_value_t *filename = nullptr;
         JL_GC_PUSH2(&expr, &filename);
         filename = jl_cstr_to_string(jl_filename);
         expr = jl_parse_string(jl_string_ptr(exprStr), jl_string_len(exprStr), 0, 1);
-        assert(jl_is_svec(expr));
-        assert(jl_is_expr(jl_svec_ref((jl_svec_t*)expr, 0)));
-        llvm::errs() << "Generate Expr :" << juliaValueToString(jl_svec_ref((jl_svec_t*)expr, 0));
+        if (!jl_is_svec(expr)){
+            abort();
+        }
+        expr = jl_svec_ref((jl_svec_t*)expr, 0);
+        if (!jl_is_expr(expr)){
+            jl_printf(JL_STDOUT, "Not an Expr");
+            jl_(expr);
+            abort();
+        }
+        llvm::errs() << "Generate Expr :" << juliaValueToString(expr) << '\n';
+        onResolve(expr);
         JL_GC_POP();
         return (void *)expr;
     }
     else if (startsWith(s, "jlbnd::")) {
-        assert(mod);
+        assertAbort(mod);
         value = decodeJuliaValue(mod, code);
-        assert(value);
+        assertAbort(value);
     }
     else if (startsWith(s, "jlptr::")) {
         size_t offset = strlen("jlptr::");
@@ -1145,54 +1291,54 @@ void *resolveExternJLValue(std::string s, std::string code,
         return (void *)i;
     }
     else if (startsWith(s, "jlslot::")) {
-        assert(mod);
+        assertAbort(mod);
         value = decodeJuliaValue(mod, code);
-        assert(value);
+        assertAbort(value);
         // A double pointer for slot.
         value = (void *)&(((jl_binding_t *)value)->value);
     }
     else if (startsWith(s, "jlvalue::")) {
-        assert(mod);
+        assertAbort(mod);
         value = decodeJLBinding(mod, code);
         onResolve((jl_value_t *)value);
-        assert(value);
+        assertAbort(value);
     }
     else if (startsWith(s, "julia::dylib::")) {
         size_t headOffset = strlen("julia::dylib::");
         size_t symOffset = s.find("::", headOffset);
-        assert(symOffset != s.npos);
+        assertAbort(symOffset != s.npos);
         std::string lib = s.substr(headOffset, symOffset - headOffset);
         std::string sym = s.substr(symOffset + 2);
         void *libhandle = jl_get_library_(lib.c_str(), 1);
         void *ptr;
-        assert(jl_dlsym(libhandle, sym.c_str(), &ptr, 1));
+        assertAbort(jl_dlsym(libhandle, sym.c_str(), &ptr, 1));
         value = ptr;
     }
     else if (startsWith(s, "julia::internal::")) {
         size_t headOffsest = strlen("julia::internal::");
         std::string sym = s.substr(headOffsest);
         void *ptr;
-        assert(jl_dlsym(jl_RTLD_DEFAULT_handle, sym.c_str(), &ptr, 1));
+        assertAbort(jl_dlsym(jl_RTLD_DEFAULT_handle, sym.c_str(), &ptr, 1));
         value = ptr;
     }
     else if (startsWith(s, "ijl") || startsWith(s, "jl_")) {
         void *ptr;
-        assert(jl_dlsym(jl_RTLD_DEFAULT_handle, s.c_str(), &ptr, 1));
+        assertAbort(jl_dlsym(jl_RTLD_DEFAULT_handle, s.c_str(), &ptr, 1));
         value = ptr;
     }
     else {
         // strange thing, it seems llvm will emit some symbols like fmod.
         void *ptr;
-        assert(jl_dlsym(jl_RTLD_DEFAULT_handle, s.c_str(), &ptr, 1));
+        assertAbort(jl_dlsym(jl_RTLD_DEFAULT_handle, s.c_str(), &ptr, 1));
         value = ptr;
     }
     /*
 
         llvm::errs() << "Symbol not found, shouldn't happen here!" << '\n';
         llvm::errs() << s;
-        assert(0);
+        assertAbort(0);
     */
-    assert(value != nullptr);
+    assertAbort(value != nullptr);
     return value;
 }
 /*
@@ -1220,9 +1366,9 @@ std::string juliaBindingToString(jl_binding_t* bnd){
 // This function is used to produce readable name for method instance and other values
 extern "C" JL_DLLEXPORT jl_value_t *jl_decode_string(jl_value_t *s)
 {
-    assert(jl_is_string(s));
+    assertAbort(jl_is_string(s));
     size_t n = jl_string_len(s) / 2;
-    assert(jl_string_len(s) % 2 == 0);
+    assertAbort(jl_string_len(s) % 2 == 0);
     const char *str = jl_string_ptr(s);
     jl_value_t *newStr = nullptr;
     JL_GC_PUSH1(&newStr);
@@ -1238,7 +1384,7 @@ extern "C" JL_DLLEXPORT jl_value_t *jl_decode_string(jl_value_t *s)
 
 extern "C" JL_DLLEXPORT jl_value_t *jl_encode_string(jl_value_t *s)
 {
-    assert(jl_is_string(s));
+    assertAbort(jl_is_string(s));
     size_t n = jl_string_len(s);
     const char *strPtr = jl_string_ptr(s);
     jl_value_t *newStr = nullptr;
@@ -1257,7 +1403,7 @@ extern "C" JL_DLLEXPORT jl_value_t *jl_encode_string(jl_value_t *s)
 
 extern "C" JL_DLLEXPORT jl_value_t *jl_decodeJuliaValue(jl_value_t *mod, jl_value_t *str)
 {
-    assert(jl_is_string(str));
+    assertAbort(jl_is_string(str));
     std::string s = jl_string_ptr(str);
     auto v = decodeJuliaValue((jl_module_t *)mod, s);
     return (jl_value_t *)v;
@@ -1267,7 +1413,7 @@ extern "C" JL_DLLEXPORT jl_value_t *jl_encodeJuliaValue(jl_value_t *v)
 {
     bool needInvalidated = false;
     std::string s = encodeJuliaValue(v, needInvalidated, nullptr);
-    assert(!needInvalidated);
+    assertAbort(!needInvalidated);
     return jl_pchar_to_string(s.data(), s.size());
 }
 
@@ -1287,3 +1433,4 @@ extern "C" JL_DLLEXPORT void jl_probeEncodeString(const char *ptr)
 {
     probeEncodeString(ptr);
 }
+#undef assert
