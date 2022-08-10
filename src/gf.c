@@ -2261,7 +2261,7 @@ STATIC_INLINE jl_value_t *verify_type(jl_value_t *v) JL_NOTSAFEPOINT
     assert(v && jl_typeof(v) && jl_typeof(jl_typeof(v)) == (jl_value_t*)jl_datatype_type);
     return v;
 }
-
+extern void* (*jl_staticjit_get_cache)(jl_method_instance_t*, size_t);
 STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t nargs, jl_method_instance_t *mfunc, size_t world)
 {
     // manually inlined copy of jl_method_compiled
@@ -2281,6 +2281,18 @@ STATIC_INLINE jl_value_t *_jl_invoke(jl_value_t *F, jl_value_t **args, uint32_t 
 #ifdef _OS_WINDOWS_
     DWORD last_error = GetLastError();
 #endif
+    jl_value_t* result = NULL;
+    if (jl_staticjit_get_cache != NULL){
+        jl_method_t* def = mfunc->def.method;
+        if (jl_is_method(def) && !def->unspecialized && jl_symbol_name(mfunc->def.method->name)[0] != '@'){
+            void* callptr = (*jl_staticjit_get_cache)(mfunc, world);
+            jl_value_t* (*jl_callptr)(jl_value_t*,jl_value_t**,size_t) = callptr;
+            if (callptr != NULL){
+                result = jl_callptr(F, args, nargs);
+                return result;
+            }
+        }
+    }
     codeinst = jl_compile_method_internal(mfunc, world);
 #ifdef _OS_WINDOWS_
     SetLastError(last_error);

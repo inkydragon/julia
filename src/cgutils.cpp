@@ -516,11 +516,13 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
         // 2. if the value is not bitsvalue (concrete immutable with pointer field), and we know that the value is referred by a 
         //constant jl_binding_t, we emit a global ref
         // 3. else we emit a pointer
+        /*
         if (b->constp && jl_atomic_load_relaxed(&(b->value)) != NULL){
             bv = emitExternalJuliaValue(ctx, jl_atomic_load_relaxed(&(b->value)), b);
             return bv;
         }
         else{
+        */
             // we should produce a slot for non-constant value
             std::string llvmName;
             registerJLBinding(ctx.linfo, llvmName, b, true);
@@ -541,7 +543,7 @@ static Value *julia_binding_gv(jl_codectx_t &ctx, jl_binding_t *b)
                 );
             }
             return (Value*)gv;
-        }
+        //}
     }
     if (imaging_mode)
         bv = emit_bitcast(ctx,
@@ -3176,11 +3178,12 @@ static Value *box_union(jl_codectx_t &ctx, const jl_cgval_t &vinfo, const SmallB
     return box_merge;
 }
 
-extern void registerExprValue(jl_method_instance_t *mi, jl_value_t *v, std::string &llvmName);
+// extern void registerExprValue(jl_method_instance_t *mi, jl_value_t *v, std::string &llvmName);
 static Value* copyast_box(jl_codectx_t &ctx, const jl_cgval_t& ast){
     assert(ast.typ==(jl_value_t*)jl_expr_type && ast.constant);
     std::string name; 
     assert(ast.constant != nullptr);
+    /*
     jl_value_t* jl_string_f = jl_eval_string("Base.string");
     if (jl_string_f != nullptr){
         jl_value_t** args;
@@ -3194,8 +3197,10 @@ static Value* copyast_box(jl_codectx_t &ctx, const jl_cgval_t& ast){
         registerExprValue(ctx.linfo, rt, name);
     }
     else{
-        registerExternalValue(ctx.linfo, ast.constant, name, nullptr);
-    }
+    */
+    // We mark it as non relocatable
+    registerExternalValue(ctx.linfo, ast.constant, name, nullptr);
+    //}
     StringRef nameref(name);
     llvm::Module* M = ctx.f->getParent();
     GlobalVariable* gv = cast_or_null<GlobalVariable>(M->getNamedValue(nameref));

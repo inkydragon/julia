@@ -125,28 +125,6 @@ JL_DLLEXPORT void* (*jl_get_cfunction_ptr)(jl_method_instance_t*, size_t) = NULL
 JL_DLLEXPORT void jl_set_get_cfunction_ptr(void* ptr){
     jl_get_cfunction_ptr = (void* (*)(jl_method_instance_t*, size_t))ptr;
 }
-extern int must_be_compiled(jl_code_info_t* thk);
-static jl_value_t* direct_call(jl_value_t **argv, size_t nargs, interpreter_state *s, int* useCache){
-    jl_value_t *result = NULL;
-    if (jl_staticjit_get_cache != NULL && *useCache){
-        jl_method_instance_t* mi = jl_method_lookup(argv,nargs,jl_world_counter);
-        // Prevent compiling macro call
-        if (mi != NULL && (jl_is_method(mi->def.method) && jl_symbol_name(mi->def.method->name)[0] != '@')){
-            if (mi->def.method->module != jl_core_module){
-                //jl_((jl_value_t*)mi);
-                void* callptr = (*jl_staticjit_get_cache)(mi, jl_world_counter);
-                jl_value_t* (*jl_callptr)(jl_value_t*,jl_value_t**,size_t) = callptr;
-                if (callptr != NULL){
-                    result = jl_callptr(argv[0],&(argv[1]),nargs-1);
-                    *useCache = 1;
-                    return result;
-                }
-            }
-        }
-    }
-    *useCache = 0;
-    return result;
-}
 
 static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s)
 {
@@ -157,15 +135,7 @@ static jl_value_t *do_call(jl_value_t **args, size_t nargs, interpreter_state *s
     for (i = 0; i < nargs; i++)
         argv[i] = eval_value(args[i], s);
     jl_value_t *result = NULL;
-    int useCache = s->jit;
-    result = direct_call(argv, nargs, s, &useCache);
-    if (!useCache){
-        result = jl_apply(argv, nargs);
-    }
-    if (result == NULL){
-        jl_printf(JL_STDOUT,"shouldn't  be null here!");
-        exit(1);
-    }
+    result = jl_apply(argv, nargs);
     JL_GC_POP();
     return result;
 }
@@ -1125,22 +1095,10 @@ jl_value_t *NOINLINE jl_fptr_interpret_call(jl_value_t *f, jl_value_t **args, ui
     s->continue_at = 0;
     s->mi = mi;
     JL_GC_ENABLEFRAME(s);
-    int useCache = 0;
     jl_value_t* r;
     // what's the number of args?
     // we should add one here!
-    if (!isva){
-        if (s->jit || must_be_compiled(src)){
-            useCache = 1;
-            r = direct_call(s->locals, nargs + 1, s, &useCache);
-        }   
-    }
-    if (!useCache){
-        r = eval_body(stmts, s, 0, 0);
-    }
-    else{
-        assert(r != NULL);
-    }
+    r = eval_body(stmts, s, 0, 0);
     JL_GC_POP();
     return r;
 }

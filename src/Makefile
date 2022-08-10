@@ -66,7 +66,7 @@ RUNTIME_CODEGEN_SRCS := jitlayers aotcompile debuginfo disasm llvm-simdloop llvm
 	llvm-lower-handlers llvm-gc-invariant-verifier llvm-propagate-addrspaces \
 	llvm-multiversioning llvm-alloc-opt cgmemmgr llvm-remove-addrspaces \
 	llvm-remove-ni llvm-julia-licm llvm-demote-float16 \
-	StaticJIT JuliaValueCoder JuliaObjectLinkingLayer WorldAge CacheGraph DefinitionGenerator
+	StaticJIT JuliaValueCoder JuliaObjectLinkingLayer WorldAge CacheGraph DefinitionGenerator ObjectFileInterface
 FLAGS += -I$(shell $(LLVM_CONFIG_HOST) --includedir)
 CG_LLVM_LIBS := all
 ifeq ($(USE_POLLY),1)

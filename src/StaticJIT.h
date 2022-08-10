@@ -30,7 +30,6 @@
 using namespace llvm;
 using namespace llvm::orc;
 using namespace llvm::jitlink;
-#include "JuliaObjectLinkingLayer.h"
 #include "julia.h"
 #include "julia_assert.h"
 #include "julia_internal.h"
@@ -43,6 +42,14 @@ using namespace llvm::jitlink;
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#define UseJITLink 0
+#if UseJITLink
+#include "JuliaObjectLinkingLayer.h"
+#else
+#include "llvm/ExecutionEngine/Orc/RTDyldObjectLinkingLayer.h"
+#include "RTDyldObject.h"
+#include "ObjectFileInterface.h"
+#endif
 
 extern "C" JL_DLLEXPORT void jl_module_to_string(std::stringstream &s, jl_module_t *m);
 extern std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
@@ -52,13 +59,29 @@ enum GeneratedPointerType { InvokePointer = 0x1, SpecPointer = 0x2 };
 // Add an object to JuliaObjectLinkingLayer. This is lazy, and ownership is transfered to
 // ObjectMaterializationUnit. Materizalition happens when we look up symbols. Once
 // materialization is done, the memory is released. This is an helper function
-inline Error addObjectInternal(JuliaObjectLinkingLayer &OL, JITDylib &JD,
+
+#if UseJITLink
+inline Error addObjectInternal(ExecutionSession &ES, JuliaObjectLinkingLayer &OL, JITDylib &JD,
                         std::unique_ptr<JuliaObjectFile> ObjectFile)
 {
     auto RT = JD.getDefaultResourceTracker();
     return JD.define(ObjectMaterializationUnit::Create(OL, std::move(ObjectFile)),
                      std::move(RT));
 };
+#else
+inline Error addObjectInternal(ExecutionSession &ES, RTDyldObjectLinkingLayer &OL, JITDylib &JD,
+                        std::unique_ptr<JuliaObjectFile> ObjectFile)
+{
+    auto eI = getObjectFileInterface(ES,  *(ObjectFile->MemoryBuffer));
+    if (!eI){
+        llvm::errs() << eI.takeError();
+    }
+    auto RT = JD.getDefaultResourceTracker();
+    return JD.define(ObjectMaterializationUnit::Create(*eI, OL, std::move(ObjectFile)),
+                     std::move(RT));
+};
+#endif
+
 class JuliaRuntimeSymbolGenerator;
 class StaticJuliaJIT {
 public:
@@ -80,6 +103,7 @@ public:
     };
     // TODO : fix this function, reconsider invalidated function handle
     void compileMethodInstancePatched(jl_method_instance_t* mi, CachedMethodInstanceNode* cacheNode, size_t world);
+    void* probeDebugSymbol(std::string &name);
     void compileMethodInstanceCached(jl_method_instance_t *mi, size_t world, JITMethodInstanceNode* parentNode = nullptr);
     std::string getPath(std::string& miName, OutputFileType fty)
     {
@@ -101,12 +125,16 @@ public:
         std::error_code ec;
         llvm::raw_fd_ostream os(llvm::StringRef(path), ec);
         if (ec) {
-            llvm::errs() << ec.message().c_str();
-            assert(0);
+            // Todo : at some time julia has remove the intermediate directory...
+            // llvm::errs() << ec.message().c_str();
+            needCacheOutput = false;
+            return "";
         }
-        mod->print(os, nullptr);
-        os.close();
-        return path;
+        else{
+            mod->print(os, nullptr);
+            os.close();
+            return path;
+        }
     }
     enum ConstantType { String, Symbol, BitValue, Type };
     llvm::TargetMachine *TM;
@@ -116,8 +144,13 @@ public:
     llvm::legacy::PassManager PM;
 
     llvm::orc::ExecutionSession ES;
+    #if UseJITLink
     llvm::jitlink::InProcessMemoryManager Memgr;
     JuliaObjectLinkingLayer ObjectLayer;
+    #else
+    // SectionMemoryManager Memgr;
+    RTDyldObjectLinkingLayer ObjectLayer;
+    #endif
     JITDylib &JuliaFuncJD; // contain all the loaded object code
     JITDylib &JuliaRuntimeJD; // resolve builtin function name
     JITDylib &JuliaInvalidatedJD;

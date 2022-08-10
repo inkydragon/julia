@@ -79,20 +79,24 @@ jl_value_t* jl_call_jit(jl_value_t** args, size_t n, size_t world){
     return NULL;
 }
 extern JL_DLLEXPORT void* (*jl_staticjit_get_cache)(jl_method_instance_t*, size_t);
+JL_DLLEXPORT void (*jl_preload_binary_handler)(jl_module_t*) = NULL;
 void jl_module_run_initializer(jl_module_t *m)
 {
     JL_TIMING(INIT_MODULE);
     jl_function_t *f = jl_module_get_initializer(m);
-    if (jl_register_module != NULL){
-        jl_register_module(m);
-    }
+    
     if (f == NULL)
         return;
     jl_task_t *ct = jl_current_task;
     size_t last_age = ct->world_age;
     ct->world_age = jl_world_counter;
     if (jl_staticjit_get_cache != NULL){
-        jl_register_module(m);
+        jl_module_t* tmp = m;
+        while (tmp->parent != tmp){
+            tmp = tmp->parent;
+        }
+        jl_register_module(tmp);
+        jl_preload_binary_handler(m);
         jl_method_instance_t* mi = jl_method_lookup(&f, 1 ,jl_world_counter);
         void* callptr = (*jl_staticjit_get_cache)(mi, jl_world_counter);
         jl_value_t* (*jl_callptr)(jl_value_t*,jl_value_t**,size_t) = callptr;
@@ -509,8 +513,12 @@ static jl_module_t *eval_import_path(jl_module_t *where, jl_module_t *from JL_PR
         else {
             m = call_require(where, var);
         }
-        if (i == jl_array_len(args))
+        if (i == jl_array_len(args)){
+            if (m != NULL && jl_register_module != NULL){
+                jl_register_module(m);
+            }
             return m;
+        }            
     }
     else {
         // `.A.B.C`: strip off leading dots by following parent links
@@ -670,15 +678,20 @@ int must_be_compiled(jl_code_info_t* thk){
     assert(jl_typeis(thk->code, jl_array_any_type));
     int has_intrinsics = 0, has_defs = 0, has_loops = 0, has_opaque = 0, has_compile = 0;
     body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops, &has_opaque, &has_compile);
+    jl_module_t* m = NULL;
+    jl_method_instance_t* mi = NULL;
     if (thk->parent != NULL && thk->parent != jl_nothing){
-        jl_method_instance_t* mi = thk->parent;
-        jl_module_t* m;
+        mi = thk->parent;
+    }
+    if (mi != NULL){
         if (jl_is_module((jl_value_t*)mi->def.module)){
             m = mi->def.module;
         }
         else{
             m = mi->def.method->module;
         }
+    }
+    if (m != NULL){
         while (m != m->parent){
             m = m->parent;
         }
@@ -686,7 +699,10 @@ int must_be_compiled(jl_code_info_t* thk){
             return 0;
         }
     }
-    return ((!has_defs && (has_intrinsics || has_loops || has_compile)) && jl_staticjit_get_cache != NULL);
+    return (jl_staticjit_get_cache != NULL && (has_intrinsics || (!has_defs && has_loops &&
+                           jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
+                           jl_options.compile_enabled != JL_OPTIONS_COMPILE_MIN ) ||
+                           has_compile));
 }
 
 jl_value_t *jl_toplevel_eval_flex_internal(jl_interp_ctx* ctx, jl_module_t *JL_NONNULL m, jl_value_t *e)
@@ -931,12 +947,12 @@ jl_value_t *jl_toplevel_eval_flex_internal(jl_interp_ctx* ctx, jl_module_t *JL_N
     thk = (jl_code_info_t*)jl_exprarg(ex, 0);
     assert(jl_is_code_info(thk));
     assert(jl_typeis(thk->code, jl_array_any_type));
-    body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops, &has_opaque, &has_compile);
 
     jl_value_t *result;
     // use interpreter everywhere
     // jl_resolve_globals_in_ir((jl_array_t*)thk->code, m, NULL, 0);
     if (jl_options.image_codegen==1){
+        int compiled = 0;
         if (must_be_compiled((jl_code_info_t*)thk)) {
             // use codegen
             mfunc = method_instance_for_thunk(thk, m);
@@ -953,19 +969,22 @@ jl_value_t *jl_toplevel_eval_flex_internal(jl_interp_ctx* ctx, jl_module_t *JL_N
             }
             void* callptr = (*jl_staticjit_get_cache)(mfunc, jl_world_counter);
             jl_value_t* (*jl_callptr)(jl_value_t*,jl_value_t**,size_t) = callptr;
-            assert(jl_callptr);
-            result = jl_callptr(NULL, NULL, 0);
-            ct->world_age = last_age;
-            assert(result);
-            JL_GC_POP();
+            if (jl_callptr != NULL){
+                // due to task switch, it's possible that we can have NULL pointer here
+                result = jl_callptr(NULL, NULL, 0);
+                ct->world_age = last_age;
+                assert(result);
+                JL_GC_POP();
+                compiled = 1;
+            }
         }
-        else{
-            // else we use intepreter
+        if (!compiled){
             result = jl_interpret_toplevel_thunk_internal(ctx, m, thk);
         }
         JL_GC_POP();
         return result;
     }
+    body_attributes((jl_array_t*)thk->code, &has_intrinsics, &has_defs, &has_loops, &has_opaque, &has_compile);
     if (has_intrinsics || (!has_defs && fast && has_loops &&
                            jl_options.compile_enabled != JL_OPTIONS_COMPILE_OFF &&
                            jl_options.compile_enabled != JL_OPTIONS_COMPILE_MIN &&
