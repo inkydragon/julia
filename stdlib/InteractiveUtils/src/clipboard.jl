@@ -76,6 +76,8 @@ elseif Sys.islinux() || Sys.KERNEL === :FreeBSD
     end
 
 elseif Sys.iswindows()
+    # <WinUser.h>  Use Unicode + CR-LF + Null-terminated string
+    const CF_UNICODETEXT = UInt16(13)
     function clipboard(x::AbstractString)
         if Base.containsnul(x)
             throw(ArgumentError("Windows clipboard strings cannot contain NUL character"))
@@ -103,7 +105,7 @@ elseif Sys.iswindows()
         ccall(:memcpy, Ptr{UInt16}, (Ptr{UInt16}, Ptr{UInt16}, Csize_t), plock, x_u16, sizeof(x_u16))
         unlock = ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{UInt16},), pdata)
         (unlock == 0 && Libc.GetLastError() == 0) || return cleanup(:GlobalUnlock) # this should never fail
-        pset = ccall((:SetClipboardData, "user32"), stdcall, Ptr{UInt16}, (Cuint, Ptr{UInt16}), 13, pdata)
+        pset = ccall((:SetClipboardData, "user32"), stdcall, Ptr{UInt16}, (Cuint, Ptr{UInt16}), CF_UNICODETEXT, pdata)
         pdata != pset && return cleanup(:SetClipboardData)
         cleanup(:success)
     end
@@ -121,7 +123,7 @@ elseif Sys.iswindows()
         end
         ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Cvoid},), C_NULL) == 0 && return Base.windowserror(:OpenClipboard)
         ccall(:SetLastError, stdcall, Cvoid, (UInt32,), 0) # allow distinguishing if the clipboard simply didn't have text
-        pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{UInt16}, (Cuint,), 13)
+        pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{UInt16}, (Cuint,), CF_UNICODETEXT)
         pdata == C_NULL && return cleanup(:GetClipboardData)
         plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{UInt16}, (Ptr{UInt16},), pdata)
         plock == C_NULL && return cleanup(:GlobalLock)
