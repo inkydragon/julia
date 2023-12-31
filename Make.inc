@@ -99,6 +99,9 @@ WITH_TRACY_CALLSTACKS := 0
 # Enable Timing Counts support
 WITH_TIMING_COUNTS := 0
 
+# Use Win UCRT
+USE_WIN_UCRT := 0
+
 # Prevent picking up $ARCH from the environment variables
 ARCH:=
 
