@@ -60,7 +60,9 @@ static int endswith_extension(const char *path) JL_NOTSAFEPOINT
 }
 
 #ifdef _OS_WINDOWS_
-#define CRTDLL_BASENAME "msvcrt"
+// TODO-UCRT: add switch flag: msvcrt/ucrt
+// #define CRTDLL_BASENAME "msvcrt"
+#define CRTDLL_BASENAME "ucrtbase"
 
 JL_DLLEXPORT const char *jl_crtdll_basename = CRTDLL_BASENAME;
 const char *jl_crtdll_name = CRTDLL_BASENAME ".dll";
