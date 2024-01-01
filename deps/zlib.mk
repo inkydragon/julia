@@ -10,7 +10,7 @@ ZLIB_BUILD_OPTS += -DCMAKE_POSITION_INDEPENDENT_CODE=ON
 
 $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured: $(SRCCACHE)/$(ZLIB_SRC_DIR)/source-extracted
 	mkdir -p $(dir $@)
-	cd $(dir $@) && $(CMAKE) $(ZLIB_BUILD_OPTS) $(dir $<)
+	cd $(dir $@) && $(CMAKE) $(CMAKE_GENERATOR_COMMAND) $(ZLIB_BUILD_OPTS) $(dir $<)
 	echo 1 > $@
 
 $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled: $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured
@@ -23,8 +23,8 @@ $(eval $(call staged-install, \
 	$(INSTALL_NAME_CMD)libz.$(SHLIB_EXT) $(build_shlibdir)/libz.$(SHLIB_EXT)))
 
 clean-zlib:
-	-rm -f $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-configured $(BUILDDIR)/$(ZLIB_SRC_DIR)/build-compiled
 	-$(MAKE) -C $(BUILDDIR)/$(ZLIB_SRC_DIR) clean
+	-rm -rf $(BUILDDIR)/$(ZLIB_SRC_DIR)/
 
 get-zlib: $(ZLIB_SRC_FILE)
 extract-zlib: $(BUILDDIR)/$(ZLIB_SRC_DIR)/source-extracted
