@@ -16,11 +16,6 @@ $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured: $(BUILDDIR)/$(BLASTRAMPO
 BLASTRAMPOLINE_BUILD_ROOT := $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/src
 $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-compiled: $(BUILDDIR)/$(BLASTRAMPOLINE_SRC_DIR)/build-configured
 	cd $(dir $@)/src && $(MAKE) $(BLASTRAMPOLINE_BUILD_OPTS)
-ifeq ($(OS), WINNT)
-	# Windows doesn't like soft link, use hard link
-	cd $(BLASTRAMPOLINE_BUILD_ROOT)/build/ && \
-		cp -f --dereference --link libblastrampoline.dll libblastrampoline.dll
-endif
 	echo 1 > $@
 
 define BLASTRAMPOLINE_INSTALL
