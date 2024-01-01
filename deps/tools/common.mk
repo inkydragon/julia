@@ -44,6 +44,13 @@ CMAKE_CXX := "$$(which $(CXX_BASE))"
 CMAKE_CC_ARG := $(CC_ARG)
 CMAKE_CXX_ARG := $(CXX_ARG)
 endif
+
+ifeq ($(OS),WINNT)
+# CMake need unix like path with .ext `C:/WINNT`
+CMAKE_CC := `cygpath --mixed $(CMAKE_CC)`
+CMAKE_CXX := `cygpath --mixed $(CMAKE_CXX)`
+endif
+
 CMAKE_COMMON += -DCMAKE_C_COMPILER=$(CMAKE_CC)
 ifneq ($(strip $(CMAKE_CC_ARG)),)
 CMAKE_COMMON += -DCMAKE_C_COMPILER_ARG1="$(CMAKE_CC_ARG) $(SANITIZE_OPTS)"
