@@ -6,23 +6,29 @@ ifneq ($(USE_BINARYBUILDER_LIBSUITESPARSE), 1)
 LIBSUITESPARSE_PROJECTS := AMD BTF CAMD CCOLAMD COLAMD CHOLMOD LDL KLU UMFPACK RBio SPQR
 LIBSUITESPARSE_LIBS := $(addsuffix .*$(SHLIB_EXT)*,suitesparseconfig amd btf camd ccolamd colamd cholmod klu ldl umfpack rbio spqr)
 
-LIBSUITESPARSE_CMAKE_FLAGS := $(CMAKE_COMMON) \
+ifeq ($(OS),WINNT)
+BLAS_SO_NAME_EXT:=libblastrampoline-5.$(SHLIB_EXT)
+else
+BLAS_SO_NAME_EXT:=libblastrampoline.$(SHLIB_EXT)
+endif # OS==WINNT
+
+LIBSUITESPARSE_CMAKE_FLAGS := $(CMAKE_GENERATOR_COMMAND) \
+	  $(CMAKE_COMMON) \
 	  -DCMAKE_BUILD_TYPE=Release \
 	  -DENABLE_CUDA=0 \
 	  -DNFORTRAN=1 \
 	  -DNOPENMP=1 \
-	  -DNPARTITION=0 \
 	  -DNSTATIC=1 \
 	  -DBLAS_FOUND=1 \
-	  -DBLAS_LIBRARIES="$(build_shlibdir)/libblastrampoline.$(SHLIB_EXT)" \
+	  -DBLAS_LIBRARIES="$(build_shlibdir)/$(BLAS_SO_NAME_EXT)" \
 	  -DBLAS_LINKER_FLAGS="blastrampoline" \
 	  -DBLAS_UNDERSCORE=ON \
 	  -DBLA_VENDOR="blastrampoline" \
-	  -DBLAS64_SUFFIX="_64" \
-	  -DALLOW_64BIT_BLAS=ON \
 	  -DLAPACK_FOUND=1 \
-	  -DLAPACK_LIBRARIES="$(build_shlibdir)/libblastrampoline.$(SHLIB_EXT)" \
-	  -DLAPACK_LINKER_FLAGS="blastrampoline"
+	  -DLAPACK_LIBRARIES="$(build_shlibdir)/$(BLAS_SO_NAME_EXT)" \
+	  -DLAPACK_LINKER_FLAGS="blastrampoline" \
+	  -DBLAS64_SUFFIX="_64" \
+	  -DALLOW_64BIT_BLAS=ON
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
 LIBSUITESPARSE_CMAKE_FLAGS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
