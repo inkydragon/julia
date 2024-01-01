@@ -88,6 +88,16 @@ else
 $(eval $(call copy_csl,$(call versioned_libname,libpthread,0)))
 endif
 
+ifeq ($(OS),WINNT)
+install-csl:
+	mkdir -p $(build_private_libdir)/
+	cp -a /ucrt64/lib/gcc/x86_64-w64-mingw32/13.2.0/libgcc.a $(build_private_libdir)/
+	cp -a /ucrt64/lib/libgcc_s.a $(build_private_libdir)/
+	cp -a /ucrt64/lib/libucrtbase.a $(build_private_libdir)/
+	# cp -a /ucrt64/lib/libucrt.a $(build_private_libdir)/
+	cp -a /ucrt64/lib/libssp.a $(build_private_libdir)/
+endif
+
 get-csl:
 clean-csl:
 	-rm -f $(build_shlibdir)/libgfortran*$(SHLIB_EXT)*
@@ -113,6 +123,7 @@ install-csl:
 	cp -a $(build_libdir)/gcc/$(BB_TRIPLET)/13/libssp.dll.a $(build_private_libdir)/
 endif
 endif
+
 ifeq ($(OS),WINNT)
 uninstall-csl: uninstall-gcc-libraries
 uninstall-gcc-libraries:
