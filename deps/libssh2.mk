@@ -8,25 +8,19 @@ ifeq ($(USE_SYSTEM_MBEDTLS), 0)
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: | $(build_prefix)/manifest/mbedtls
 endif
 
-LIBSSH2_OPTS := $(CMAKE_COMMON) -DBUILD_SHARED_LIBS=ON -DBUILD_EXAMPLES=OFF \
-		-DCMAKE_BUILD_TYPE=Release
-
+LIBSSH2_OPTS := $(CMAKE_COMMON)  
+LIBSSH2_OPTS += -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON
+LIBSSH2_OPTS += -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF -DENABLE_ZLIB_COMPRESSION=OFF
 ifeq ($(OS),WINNT)
-LIBSSH2_OPTS += -DCRYPTO_BACKEND=WinCNG -DENABLE_ZLIB_COMPRESSION=OFF
-ifeq ($(BUILD_OS),WINNT)
-LIBSSH2_OPTS += -G"MSYS Makefiles"
-endif
+LIBSSH2_OPTS += -DCRYPTO_BACKEND=WinCNG
 else
-LIBSSH2_OPTS += -DCRYPTO_BACKEND=mbedTLS -DENABLE_ZLIB_COMPRESSION=OFF
+LIBSSH2_OPTS += -DCRYPTO_BACKEND=mbedTLS
 endif
 
 ifneq (,$(findstring $(OS),Linux FreeBSD))
 LIBSSH2_OPTS += -DCMAKE_INSTALL_RPATH="\$$ORIGIN"
 endif
 
-ifeq ($(LIBSSH2_ENABLE_TESTS), 0)
-LIBSSH2_OPTS += -DBUILD_TESTING=OFF
-endif
 
 LIBSSH2_SRC_PATH := $(SRCCACHE)/$(LIBSSH2_SRC_DIR)
 
@@ -41,7 +35,7 @@ $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: \
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured: $(LIBSSH2_SRC_PATH)/source-extracted
 	mkdir -p $(dir $@)
 	cd $(dir $@) && \
-	$(CMAKE) $(dir $<) $(LIBSSH2_OPTS)
+	$(CMAKE) $(dir $<) $(CMAKE_GENERATOR_COMMAND) $(LIBSSH2_OPTS)
 	echo 1 > $@
 
 $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-compiled: $(BUILDDIR)/$(LIBSSH2_SRC_DIR)/build-configured
@@ -54,9 +48,18 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 
+define LIBSSH2_INSTALL
+
+ifeq ($$(OS),WINNT)
+	mkdir -p $2/$$(build_shlibdir)
+	cp $1/src/libssh2.$$(SHLIB_EXT) $2/$$(build_shlibdir)/libssh2.$$(SHLIB_EXT)
+else
+	$(call MAKE_INSTALL,$1,$2,$3)
+endif
+endef
 $(eval $(call staged-install, \
 	libssh2,$(LIBSSH2_SRC_DIR), \
-	MAKE_INSTALL,,, \
+	LIBSSH2_INSTALL,,, \
 	$$(INSTALL_NAME_CMD)libssh2.$$(SHLIB_EXT) $$(build_shlibdir)/libssh2.$$(SHLIB_EXT)))
 
 clean-libssh2:
