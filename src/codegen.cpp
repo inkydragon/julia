@@ -22,6 +22,7 @@
 #include <setjmp.h>
 #include <string>
 #include <fstream>
+#include <iostream>
 #include <map>
 #include <array>
 #include <vector>
@@ -1092,7 +1093,6 @@ public:
     const jl_cgparams_t *params = NULL;
 
     std::vector<std::unique_ptr<llvm::Module>> llvmcall_modules;
-
     jl_codectx_t(LLVMContext &llvmctx, jl_codegen_params_t &params)
       : builder(llvmctx),
         emission_context(params),
@@ -1779,7 +1779,8 @@ static std::pair<bool, bool> uses_specsig(jl_method_instance_t *lam, jl_value_t 
             return std::make_pair(false, false);
     }
     // not invalid, consider if specialized signature is worthwhile
-    if (prefer_specsig)
+    // it's not quite correct, for sometimes the function doesn't get specialized, even we have created a code instance
+    if (prefer_specsig || jl_options.image_codegen == 1)
         return std::make_pair(true, false);
     if (!deserves_retbox(rettype) && !jl_is_datatype_singleton((jl_datatype_t*)rettype))
         return std::make_pair(true, false);
@@ -2338,6 +2339,14 @@ static jl_cgval_t emit_globalref(jl_codectx_t &ctx, jl_module_t *mod, jl_sym_t *
 {
     jl_binding_t *bnd = NULL;
     Value *bp = global_binding_pointer(ctx, mod, name, &bnd, false);
+    if (jl_options.image_codegen == 1){
+        if (bnd != NULL && bnd->value != NULL){
+            jl_value_t * bv = jl_atomic_load_relaxed(&bnd->value);
+            if (bnd->constp==1 && jl_is_intrinsic(bv)){
+                return mark_julia_const(bnd->value);
+            }
+        }
+    }
     if (bnd && bnd->value != NULL) {
         if (bnd->constp) {
             return mark_julia_const(bnd->value);
@@ -2737,7 +2746,7 @@ static bool emit_f_opfield(jl_codectx_t &ctx, jl_cgval_t *ret, jl_value_t *f,
     return false;
 }
 
-static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
+extern std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     emit_function(
         jl_method_instance_t *lam,
         jl_code_info_t *src,
@@ -3634,6 +3643,14 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
         }
         else {
             jl_value_t *ci = ctx.params->lookup(mi, ctx.world, ctx.world); // TODO: need to use the right pair world here
+            if (jl_options.image_codegen == 1){
+                // force infer the function, it seems that some subroutine is uninferred;
+                if (ci == jl_nothing){
+                    (void)jl_type_infer(mi, ctx.world, 0);
+                    ci = ctx.params->lookup(mi, ctx.world, ctx.world);
+                    assert(ci != jl_nothing);
+                }
+            }
             jl_code_instance_t *codeinst = (jl_code_instance_t*)ci;
             if (ci != jl_nothing) {
                 auto invoke = jl_atomic_load_relaxed(&codeinst->invoke);
@@ -3661,8 +3678,16 @@ static jl_cgval_t emit_invoke(jl_codectx_t &ctx, const jl_cgval_t &lival, const 
                         }
                     }
                     if (need_to_emit) {
-                        raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << globalUnique++;
-                        protoname = StringRef(name);
+                        if (jl_options.image_codegen == 1){
+                            raw_string_ostream(name) << (specsig ? "julia::method::specfunc::" : "julia::method::invoke::"); 
+                            const char* s = name_from_method_instance(mi);
+                            raw_string_ostream(name) << s;//<< "_" << globalUnique++;
+                            protoname = StringRef(name);
+                        }
+                        else{
+                            raw_string_ostream(name) << (specsig ? "j_" : "j1_") << name_from_method_instance(mi) << "_" << globalUnique++;
+                            protoname = StringRef(name);
+                        }
                     }
                     jl_returninfo_t::CallingConv cc = jl_returninfo_t::CallingConv::Boxed;
                     unsigned return_roots = 0;
@@ -3808,6 +3833,12 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
     else {
         b = jl_get_binding(m, s);
         if (b == NULL) {
+            /*
+            jl_printf(JL_STDOUT,"Not exist!\n");
+            jl_error("Shouldn't be here!");
+            jl_static_show(JL_STDOUT,(jl_value_t*)m);
+            jl_printf(JL_STDOUT,"Not exist!\n");
+            */
             // var not found. switch to delayed lookup.
             Constant *initnul = V_null;
             GlobalVariable *bindinggv = new GlobalVariable(*ctx.f->getParent(), T_pjlvalue,
@@ -3837,6 +3868,33 @@ static Value *global_binding_pointer(jl_codectx_t &ctx, jl_module_t *m, jl_sym_t
     }
     if (pbnd)
         *pbnd = b;
+    if (jl_options.image_codegen == 1){
+        jl_value_t *bv = jl_atomic_load_relaxed(&b->value);
+        if (bv!=NULL && b->constp == 1 && jl_is_intrinsic(bv)){
+            return NULL;
+        }
+        /*
+        if (b->constp == 1 && jl_is_intrinsic(b->value)){
+            // emit a GlobalVariable for a jl_value_t named "cname"
+            // store the name given so we can reuse it (facilitating merging later)
+            // so first see if there already is a GlobalVariable for this address
+            Module *M = ctx.f->getParent();
+            StringRef name(jl_symbol_name(b->name));
+            GlobalVariable* &gv = cast_or_null<GlobalVariable>(M->getNamedValue(name));
+            // TODO : check whether these two variables are the same
+            // TODO : check ownership of name
+            if (gv == nullptr)
+                gv = new GlobalVariable(*M, T_pjlvalue,
+                                        false, GlobalVariable::ExternalLinkage,
+                                        NULL, name); 
+            // LLVM passes sometimes strip metadata when moving load around
+            // since the load at the new location satisfy the same condition as the original one.
+            // Mark the global as constant to LLVM code using our own metadata
+            // which is much less likely to be striped.
+            gv->setMetadata("julia.intrinsic", MDNode::get(gv->getContext(), None));
+            //return gv;
+        */
+    }
     return julia_binding_gv(ctx, b);
 }
 
@@ -4875,9 +4933,16 @@ static jl_cgval_t emit_expr(jl_codectx_t &ctx, jl_value_t *expr, ssize_t ssaval)
             // elide call to jl_copy_ast when possible
             return ast;
         }
-        return mark_julia_type(ctx,
-                ctx.builder.CreateCall(prepare_call(jlcopyast_func),
-                                       boxed(ctx, ast)), true, jl_expr_type);
+        if (jl_options.image_codegen == 1){
+            return mark_julia_type(ctx,
+                    ctx.builder.CreateCall(prepare_call(jlcopyast_func),
+                                        copyast_box(ctx, ast)), true, jl_expr_type);
+        }
+        else{
+            return mark_julia_type(ctx,
+                    ctx.builder.CreateCall(prepare_call(jlcopyast_func),
+                                        boxed(ctx, ast)), true, jl_expr_type);
+        }
     }
     else if (head == jl_loopinfo_sym) {
         // parse Expr(:loopinfo, "julia.simdloop", ("llvm.loop.vectorize.width", 4))
@@ -6193,7 +6258,7 @@ static jl_datatype_t *compute_va_type(jl_method_instance_t *lam, size_t nreq)
 }
 
 // Compile to LLVM IR, using a specialized signature if applicable.
-static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
+std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
     emit_function(
         jl_method_instance_t *lam,
         jl_code_info_t *src,
@@ -6337,21 +6402,37 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
 
     std::string _funcName;
     raw_string_ostream funcName(_funcName);
-    // try to avoid conflicts in the global symbol table
-    if (specsig)
-        funcName << "julia_"; // api 5
-    else if (needsparams)
-        funcName << "japi3_";
-    else
-        funcName << "japi1_";
     const char* unadorned_name = ctx.name;
-#if defined(_OS_LINUX_)
-    if (unadorned_name[0] == '@')
-        unadorned_name++;
-#endif
-    funcName << unadorned_name << "_" << globalUnique++;
-    declarations.specFunctionObject = funcName.str();
-
+    // try to avoid conflicts in the global symbol table
+    if (jl_options.image_codegen == 1){
+        if (specsig){
+            funcName << "julia::method::specfunc::";
+        }
+        else if (needsparams){
+            funcName << "julia::method::needsparams::";
+        }
+        else{
+            funcName << "julia::method::invoke::";
+        }
+        // we don't need unadorn name
+        funcName << unadorned_name;
+        declarations.specFunctionObject = funcName.str();
+    }
+    else{
+        if (specsig)
+            funcName << "julia_"; // api 5
+        else if (needsparams)
+            funcName << "japi3_";
+        else
+            funcName << "japi1_";
+        //const char* unadorned_name = ctx.name;
+    #if defined(_OS_LINUX_)
+        if (unadorned_name[0] == '@')
+            unadorned_name++;
+    #endif
+        funcName << unadorned_name << "_" << globalUnique++;
+        declarations.specFunctionObject = funcName.str();
+    };
     // allocate Function declarations and wrapper objects
     Module *M = new Module(ctx.name, jl_LLVMContext);
     jl_setup_module(M, ctx.params);
@@ -6389,7 +6470,12 @@ static std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
         }();
 
         std::string wrapName;
-        raw_string_ostream(wrapName) << "jfptr_" << unadorned_name << "_" << globalUnique++;
+        if (jl_options.image_codegen == 1){
+            raw_string_ostream(wrapName) << "julia::method::invoke::" << unadorned_name;
+        }
+        else{
+            raw_string_ostream(wrapName) << "jfptr_" << unadorned_name << "_" << globalUnique++;
+        }
         declarations.functionObject = wrapName;
         (void)gen_invoke_wrapper(lam, jlrettype, returninfo, retarg, declarations.functionObject, M, ctx.emission_context);
     }

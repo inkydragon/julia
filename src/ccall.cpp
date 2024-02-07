@@ -623,10 +623,11 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
     jl_value_t *rt = NULL;
     Value *res;
     native_sym_arg_t sym = {};
-    JL_GC_PUSH2(&rt, &sym.gcroot);
-
+    jl_value_t *param_type = NULL;
+    JL_GC_PUSH3(&rt, &param_type, &sym.gcroot);
     if (nargs == 2) {
         rt = static_eval(ctx, args[2]);
+        param_type = rt;
         if (rt == NULL) {
             JL_GC_POP();
             jl_cgval_t argv[2];
@@ -658,7 +659,40 @@ static jl_cgval_t emit_cglobal(jl_codectx_t &ctx, jl_value_t **args, size_t narg
         if (sym.lib_expr) {
             res = runtime_sym_lookup(ctx, cast<PointerType>(T_pint8), NULL, sym.lib_expr, sym.f_name, ctx.f);
         }
-        else if (imaging_mode) {
+        else if (imaging_mode && jl_options.image_codegen==1) {
+            // This is not quite correct, we'd better seperate cglobal and other function symbols
+            // otherwise, codegen is order dependent.
+            llvm::Module* mod = ctx.f->getParent();
+            std::string cglobalname;
+            bool is_libjulia_internal = true;
+            native_sym_arg_t& symarg = sym;
+            if (symarg.f_lib) {
+            #ifdef _OS_WINDOWS_
+                if ((f_lib == JL_EXE_LIBNAME) || // preventing invalid pointer access
+                    (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
+                    (f_lib == JL_LIBJULIA_DL_LIBNAME) ||
+                    (!strcmp(f_lib, jl_crtdll_basename))) {
+                    // libjulia-like
+                    is_libjulia_internal = true;
+                }
+                else
+                    is_libjulia_internal = false;
+            #else
+                is_libjulia_internal = false;
+            #endif
+            }
+            if (!is_libjulia_internal){
+                llvm::raw_string_ostream(cglobalname) << "julia::dylib::" << symarg.f_lib << "::" << symarg.f_name;
+            }
+            else{
+                llvm::raw_string_ostream(cglobalname) << "julia::internal::" << symarg.f_name;
+            }
+            // julia::dylib::XXX and julia::cglobal::XXX is actually the same
+            // getOrInsertGlobal will automatically convert the global variable to correct type
+            llvm::Constant* gv = mod->getOrInsertGlobal(cglobalname.c_str(), julia_type_to_llvm(ctx, param_type));
+            res = (Value*)gv;
+        }
+        else if (imaging_mode && jl_options.image_codegen==0){
             res = runtime_sym_lookup(ctx, cast<PointerType>(T_pint8), sym.f_lib, NULL, sym.f_name, ctx.f);
             res = ctx.builder.CreatePtrToInt(res, lrt);
         }
@@ -1893,7 +1927,43 @@ jl_cgval_t function_sig_t::emit_a_ccall(
         if (symarg.lib_expr) {
             llvmf = runtime_sym_lookup(ctx, funcptype, NULL, symarg.lib_expr, symarg.f_name, ctx.f);
         }
-        else if (imaging_mode) {
+        else if (imaging_mode && jl_options.image_codegen == 1) {
+            // we need to emit function declaration only once
+            /*
+            
+            GlobalVariable* gv = cast_or_null<GlobalVariable>(mod->getNamedValue(symarg.f_name));
+            if (gv == nullptr){
+                llvmf = Function::Create(functype, Function::ExternalLinkage, symarg.f_name, mod);
+            }
+            */
+            llvm::Module* mod = ctx.f->getParent();
+            std::string funcname;
+            bool is_libjulia_internal = true;
+            if (symarg.f_lib) {
+            #ifdef _OS_WINDOWS_
+                if ((f_lib == JL_EXE_LIBNAME) || // preventing invalid pointer access
+                    (f_lib == JL_LIBJULIA_INTERNAL_DL_LIBNAME) ||
+                    (f_lib == JL_LIBJULIA_DL_LIBNAME) ||
+                    (!strcmp(f_lib, jl_crtdll_basename))) {
+                    // libjulia-like
+                    is_libjulia_internal = true;
+                }
+                else
+                    is_libjulia_internal = false;
+            #else
+                is_libjulia_internal = false;
+            #endif
+            }
+            if (!is_libjulia_internal){
+                llvm::raw_string_ostream(funcname) << "julia::dylib::" << symarg.f_lib << "::" << symarg.f_name;
+            }
+            else{
+                llvm::raw_string_ostream(funcname) << "julia::internal::" << symarg.f_name;
+            }
+            llvmf = mod->getOrInsertFunction(funcname.c_str(), functype).getCallee();
+            
+        }
+        else if (imaging_mode && jl_options.image_codegen == 0){
             // vararg requires musttail,
             // but musttail is incompatible with noreturn.
             if (functype->isVarArg())
