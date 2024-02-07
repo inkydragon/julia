@@ -1850,15 +1850,15 @@ static jl_tupletype_t *lookup_arg_type_tuple(jl_value_t *arg1 JL_PROPAGATES_ROOT
     return jl_lookup_arg_tuple_type(arg1, args, nargs, 1);
 }
 
-jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world)
+JL_DLLEXPORT jl_method_instance_t *jl_method_lookup_internal(jl_value_t *f, jl_value_t **args, size_t nargs, size_t world)
 {
     assert(nargs > 0 && "expected caller to handle this case");
-    jl_methtable_t *mt = jl_gf_mtable(args[0]);
+    jl_methtable_t *mt = jl_gf_mtable(f);
     jl_typemap_t *cache = jl_atomic_load_relaxed(&mt->cache); // XXX: gc root for this?
-    jl_typemap_entry_t *entry = jl_typemap_assoc_exact(cache, args[0], &args[1], nargs, jl_cachearg_offset(mt), world);
+    jl_typemap_entry_t *entry = jl_typemap_assoc_exact(cache, f, args, nargs, jl_cachearg_offset(mt), world);
     if (entry)
         return entry->func.linfo;
-    jl_tupletype_t *tt = arg_type_tuple(args[0], &args[1], nargs);
+    jl_tupletype_t *tt = arg_type_tuple(f, args, nargs);
     jl_array_t *leafcache = jl_atomic_load_relaxed(&mt->leafcache);
     entry = lookup_leafcache(leafcache, (jl_value_t*)tt, world);
     if (entry)
@@ -1869,6 +1869,11 @@ jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t w
     JL_UNLOCK(&mt->writelock);
     JL_GC_POP();
     return sf;
+}
+
+jl_method_instance_t *jl_method_lookup(jl_value_t **args, size_t nargs, size_t world)
+{
+    return jl_method_lookup_internal(args[0], &args[1], nargs, world);
 }
 
 // return a Vector{Any} of svecs, each describing a method match:

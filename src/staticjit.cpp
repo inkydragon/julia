@@ -2,8 +2,6 @@
 
 #include "llvm-version.h"
 #include "platform.h"
-
-
 #include "llvm/IR/Mangler.h"
 #include <llvm/ADT/StringMap.h>
 #include <llvm/Analysis/TargetLibraryInfo.h>
@@ -16,11 +14,12 @@
 #include "llvm/ExecutionEngine/JITLink/EHFrameSupport.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include <fstream>
-#include <llvm/ExecutionEngine/Orc/ObjectLinkingLayer.h>
 #include <llvm/IR/LegacyPassManagers.h>
 #include <llvm/IR/Verifier.h>
+#include <llvm/Object/Archive.h>
 #include <llvm/Object/ArchiveWriter.h>
 #include <llvm/Support/DynamicLibrary.h>
+#include <llvm/Support/Error.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/SmallVectorMemoryBuffer.h>
 #include <llvm/Support/TargetRegistry.h>
@@ -31,264 +30,74 @@
 using namespace llvm;
 using namespace llvm::orc;
 using namespace llvm::jitlink;
+#include "StaticJIT.h"
 #include "julia.h"
 #include "julia_assert.h"
 #include "julia_internal.h"
+#include <functional>
 #include <iostream>
-#include <jitlayers.h>
 #include <string>
-class StaticJuliaJIT;
-extern StaticJuliaJIT *jl_StaticJuliaJIT;
+
+StaticJuliaJIT *jl_StaticJuliaJIT = nullptr;
+extern "C" JL_DLLEXPORT void *(*jl_staticjit_get_cache)(jl_method_instance_t *, size_t);
+extern "C" jl_method_instance_t *jl_method_lookup_internal(jl_value_t *f, jl_value_t **args,
+                                                           size_t nargs, size_t world);
+extern "C" JL_DLLEXPORT jl_value_t *jl_apply_generic_jit(jl_value_t *f, jl_value_t **args,
+                                                         size_t nargs)
+{
+    jl_value_t *result = NULL;
+    int useCache = 0;
+    // nargs is the length of args, not including function
+    // jl_method_lookup_internal includes function
+    if (jl_staticjit_get_cache != NULL) {
+        jl_method_instance_t *mi =
+            jl_method_lookup_internal(f, args, nargs + 1, jl_world_counter);
+        if (mi != NULL) {
+            if (mi->def.method->module != jl_core_module) {
+                void *callptr = (*jl_staticjit_get_cache)(mi, jl_world_counter);
+                jl_value_t *(*jl_callptr)(jl_value_t *, jl_value_t **, size_t) =
+                    (jl_value_t * (*)(jl_value_t *, jl_value_t **, size_t)) callptr;
+                if (callptr != NULL) {
+                    result = jl_callptr(f, args, nargs);
+                    useCache = 1;
+                }
+            }
+        }
+    }
+    if (!useCache) {
+        result = jl_apply_generic(f, args, nargs);
+    }
+    else {
+        assert(result != NULL);
+    }
+    return result;
+}
+
 extern TargetMachine *jl_TargetMachine;
-
-// Currently LLVM doesn't provide MaterializtionUnit for object, so we use a modified
-// version of LightMaterializtionUnit. The only difference is the `Create` method. But Since
-// LightMaterializtionUnit is defined in an anonymous namespace, we can't wrap that class.
-// We need to redefine the whole MU.
-
-class ObjectMaterializationUnit : public MaterializationUnit {
-private:
-    struct LinkGraphInterface {
-        SymbolFlagsMap SymbolFlags;
-        SymbolStringPtr InitSymbol;
-    };
-
-public:
-    static std::unique_ptr<ObjectMaterializationUnit>
-    Create(ObjectLinkingLayer &ObjLinkingLayer,
-           std::unique_ptr<llvm::object::ObjectFile> objfile,
-           std::unique_ptr<llvm::MemoryBuffer> membuf)
-    {
-        if (auto G = llvm::jitlink::createLinkGraphFromObject(membuf->getMemBufferRef())) {
-            auto LGI = scanLinkGraph(ObjLinkingLayer.getExecutionSession(), **G);
-            return std::unique_ptr<ObjectMaterializationUnit>(new ObjectMaterializationUnit(
-                ObjLinkingLayer, std::move(objfile), std::move(membuf), std::move(*G),
-                std::move(LGI)));
-        }
-        else {
-            llvm::errs() << G.takeError();
-            jl_error("shouldn't be here");
-            return nullptr;
-        }
-    }
-
-    StringRef getName() const override { return G->getName(); }
-    void materialize(std::unique_ptr<MaterializationResponsibility> MR) override
-    {
-        ObjLinkingLayer.emit(std::move(MR), std::move(G));
-    }
-
-private:
-    static LinkGraphInterface scanLinkGraph(ExecutionSession &ES, LinkGraph &G)
-    {
-        LinkGraphInterface LGI;
-
-        for (auto *Sym : G.defined_symbols()) {
-            // Skip local symbols.
-            if (Sym->getScope() == Scope::Local)
-                continue;
-            assert(Sym->hasName() && "Anonymous non-local symbol?");
-
-            JITSymbolFlags Flags;
-            if (Sym->getScope() == Scope::Default)
-                Flags |= JITSymbolFlags::Exported;
-
-            if (Sym->isCallable())
-                Flags |= JITSymbolFlags::Callable;
-
-            LGI.SymbolFlags[ES.intern(Sym->getName())] = Flags;
-        }
-
-        if ((G.getTargetTriple().isOSBinFormatMachO() && hasMachOInitSection(G)) ||
-            (G.getTargetTriple().isOSBinFormatELF() && hasELFInitSection(G)))
-            LGI.InitSymbol = makeInitSymbol(ES, G);
-
-        return LGI;
-    }
-
-    static bool hasMachOInitSection(LinkGraph &G)
-    {
-        for (auto &Sec : G.sections())
-            if (Sec.getName() == "__DATA,__obj_selrefs" ||
-                Sec.getName() == "__DATA,__objc_classlist" ||
-                Sec.getName() == "__TEXT,__swift5_protos" ||
-                Sec.getName() == "__TEXT,__swift5_proto" ||
-                Sec.getName() == "__TEXT,__swift5_types" ||
-                Sec.getName() == "__DATA,__mod_init_func")
-                return true;
-        return false;
-    }
-
-    static bool hasELFInitSection(LinkGraph &G)
-    {
-        for (auto &Sec : G.sections())
-            if (Sec.getName() == ".init_array")
-                return true;
-        return false;
-    }
-
-    static SymbolStringPtr makeInitSymbol(ExecutionSession &ES, LinkGraph &G)
-    {
-        std::string InitSymString;
-        raw_string_ostream(InitSymString) << "$." << G.getName() << ".__inits" << Counter++;
-        return ES.intern(InitSymString);
-    }
-
-    ObjectMaterializationUnit(ObjectLinkingLayer &ObjLinkingLayer,
-                              std::unique_ptr<llvm::object::ObjectFile> objfile,
-                              std::unique_ptr<llvm::MemoryBuffer> membuff,
-                              std::unique_ptr<LinkGraph> G, LinkGraphInterface LGI)
-      : MaterializationUnit(std::move(LGI.SymbolFlags), std::move(LGI.InitSymbol)),
-        objfile(std::move(objfile)),
-        membuff(std::move(membuff)),
-        ObjLinkingLayer(ObjLinkingLayer),
-        G(std::move(G))
-    {
-    }
-
-    void discard(const JITDylib &JD, const SymbolStringPtr &Name) override
-    {
-        for (auto *Sym : G->defined_symbols())
-            if (Sym->getName() == *Name) {
-                assert(Sym->getLinkage() == Linkage::Weak &&
-                       "Discarding non-weak definition");
-                G->makeExternal(*Sym);
-                break;
-            }
-    }
-    std::unique_ptr<llvm::object::ObjectFile> objfile;
-    std::unique_ptr<llvm::MemoryBuffer> membuff;
-    ObjectLinkingLayer &ObjLinkingLayer;
-    std::unique_ptr<LinkGraph> G;
-    static std::atomic<uint64_t> Counter;
-};
-std::atomic<uint64_t> ObjectMaterializationUnit::Counter{0};
-
-// Add an object to ObjectLinkingLayer. This is lazy, and ownership is transfered to ObjectMaterializationUnit.
-// Materizalition happens when we look up symbols. Once materialization is done, the memory is released.
-Error addobject(ObjectLinkingLayer &OL, JITDylib &JD,
-                std::unique_ptr<llvm::object::ObjectFile> objfile,
-                std::unique_ptr<llvm::MemoryBuffer> membuf)
-{
-    auto RT = JD.getDefaultResourceTracker();
-    return JD.define(ObjectMaterializationUnit::Create(OL, std::move(objfile),
-                                                       std::move(membuf)),
-                     std::move(RT));
-};
-
-// A materializtion unit used for resolving external variables. They are mainly produced by literal_pointer_val and ccall.
-// Currently this is unused,
-/*
-class JuliaRuntimeSymbolMaterializationUnit : public MaterializationUnit {
-public:
-    JuliaRuntimeSymbolMaterializationUnit(SymbolFlagsMap syms)
-      : MaterializationUnit(syms, nullptr){};
-    StringRef getName() const { return "<Julia Runtime Symbols>"; };
-    void materialize(std::unique_ptr<MaterializationResponsibility> R) override
-    {
-        // we should assign address to symbol here, like absolute materializetion unit
-        llvm::errs() << "Materializing runtime symbol";
-        auto symbols = R->getRequestedSymbols();
-        for (auto i = symbols.begin(); i != symbols.end(); i++) {
-            std::string s = (**i).str();
-            llvm::errs() << s;
-        }
-        SymbolMap smap;
-        // If we can't find the symbol, silently assign a 0x100 to that symbol. This will 
-
-        for (auto i = SymbolFlags.begin(); i != SymbolFlags.end(); i++) {
-            smap[(*i).first] = JITEvaluatedSymbol(0x100, (*i).second);
-        }
-        cantFail(R->notifyResolved(smap));
-        cantFail(R->notifyEmitted());
-        llvm::errs() << "Reaching here";
-    };
-    void discard(const JITDylib &JD, const SymbolStringPtr &Name) override
-    {
-        // should has no effect
-        return;
-    }
-};
-*/
-
-
-bool startsWith(std::string mainStr, std::string toMatch)
-{
-    // std::string::find returns 0 if toMatch is found at starting
-    if (mainStr.find(toMatch) == 0)
-        return true;
-    else
-        return false;
-};
-
-// provide address for some special builtin value, like true and false.
-std::vector<std::pair<std::string, uint64_t>> *SpecialJuliaRuntimeValue;
-class JuliaRuntimeSymbolGenerator : public DefinitionGenerator {
-public:
-    Error tryToGenerate(LookupState &LS, LookupKind K, JITDylib &JD,
-                        JITDylibLookupFlags JDLookupFlags,
-                        const SymbolLookupSet &LookupSet) override
-    {
-        llvm::errs() << "Generate symbol for: ";
-        llvm::errs() << JD.getName() << "\n";
-        SymbolMap smap;
-        SymbolNameVector v = LookupSet.getSymbolNames();
-        for (auto i = v.begin(); i != v.end(); i++) {
-            std::string s((**i).str().c_str());
-            uint64_t addr = get_extern_name_addr(s);
-            if (addr <= 0x100) {
-                llvm::errs() << "Unresolved : Symbol " << s << "\n";
-            }
-            else {
-                llvm::errs() << "Resolved   : Symbol " << s
-                             << " with address : " << format("%p", (void *)addr) << "\n";
-            }
-            smap[*i] = JITEvaluatedSymbol(addr, JITSymbolFlags::FlagNames::Exported);
-        }
-        return JD.define(
-            std::make_unique<AbsoluteSymbolsMaterializationUnit>(std::move(smap)));
-    };
-    // working horse to resolve symbols
-    uint64_t get_extern_name_addr(std::string &s);
-};
-
-class StaticJuliaJIT {
-public:
-    enum ConstantType { String, Symbol, BitValue };
-    llvm::TargetMachine *TM;
-
-    SmallVector<char, 0> obj_Buffer;
-    raw_svector_ostream obj_OS;
-    llvm::legacy::PassManager PM;
-
-    llvm::orc::ExecutionSession ES;
-    /*(cantFail(llvm::orc::SelfExecutorProcessControl::Create()))*/
-    llvm::jitlink::InProcessMemoryManager Memgr;
-    llvm::orc::ObjectLinkingLayer ObjectLayer;
-    JITDylib &JuliaBuiltinJD; // resolve builtin function name
-    JITDylib &JuliaRuntimeJD; // resolve runtime julia value
-    JITDylib &finalJD; // contain all the loaded object code
-    std::map<StaticJuliaJIT::ConstantType, jl_value_t *> constpool;
-    StaticJuliaJIT();
-    void init_constpool();
-};
-
+// Reuse optimizer from jitlayer.cpp
+extern void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
+extern void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM);
+extern void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
+                                  bool lower_intrinsics, bool dump_native);
 StaticJuliaJIT::StaticJuliaJIT()
   : obj_Buffer(),
     obj_OS(obj_Buffer),
     PM(),
     ES(),
     Memgr(),
-    ObjectLayer(ES, Memgr),
-    // ijl_xxx and some builtin like julia.typeof.xxx
-    JuliaBuiltinJD(ES.createBareJITDylib("JuliaBuiltin")),
+    ObjectLayer(this, ES, Memgr),
     // deal with external name of julia.XXX.XXX
-    JuliaRuntimeJD(ES.createBareJITDylib("JuliaRuntime")),
     // collect all the symbols of added object file
-    finalJD(ES.createBareJITDylib("finalJD")),
-    constpool()
+    JuliaFuncJD(ES.createBareJITDylib("JuliaFuncJD")),
+    JuliaRuntimeJD(ES.createBareJITDylib("JuliaRuntime")),
+    JuliaInvalidatedJD(ES.createBareJITDylib("JuliaInvalidatedJD")),
+    JuliaFallbackJD(ES.createBareJITDylib("JuliaFallbackJD")),
+    constpool(),
+    MethodBlacklist(nullptr),
+    inCompiling(false),
+    cacheGraph(this)
 {
-    init_constpool();
+    initConstPool();
     // since we use ObjectLinkerLayer, which is a static linker, so we doesn't support
     // relocation! so jl_TargetMachine is just fine in this case?
     Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
@@ -310,498 +119,139 @@ StaticJuliaJIT::StaticJuliaJIT()
     ObjectLayer.addPlugin()
     */
     auto DL = TM->createDataLayout();
-    // JuliaRuntimeJD.addGenerator(std::make_unique<JuliaRuntimeSymbolGenerator>());
+    auto generatorRef = std::move(std::make_unique<JuliaRuntimeSymbolGenerator>(this));
+    generator = generatorRef.get();
+    JuliaRuntimeJD.addGenerator(std::move(generatorRef));
+    JITDylibSearchOrder emptyorder1;
+    JuliaRuntimeJD.setLinkOrder(emptyorder1, true);
+    JITDylibSearchOrder emptyorder2;
+    JuliaFallbackJD.setLinkOrder(emptyorder2, true);
+    JITDylibSearchOrder emptyorder3 = {
+        {&JuliaFuncJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly},
+        {&JuliaRuntimeJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly},
+        {&JuliaInvalidatedJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly},
+        {&JuliaFallbackJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly}};
+    JuliaInvalidatedJD.addGenerator(
+        std::make_unique<JuliaInvalidatedFunctionGenerator>(this));
+    JuliaInvalidatedJD.setLinkOrder(emptyorder3, true);
     std::string ErrorStr;
     if (sys::DynamicLibrary::LoadLibraryPermanently(nullptr, &ErrorStr)) {
         report_fatal_error("FATAL: unable to dlopen self\n" + ErrorStr);
     }
-    // Fallback to resolve builtin symbols. In future it would resolve "julia::internal::XXX" symbol. 
-    // But currently this is unused
-    JuliaBuiltinJD.addGenerator(cantFail(
+    JuliaFallbackJD.addGenerator(cantFail(
         orc::DynamicLibrarySearchGenerator::GetForCurrentProcess(DL.getGlobalPrefix())));
-    finalJD.addGenerator(std::make_unique<JuliaRuntimeSymbolGenerator>());
-    JITDylibSearchOrder emptyorder;
-    JuliaRuntimeJD.setLinkOrder(emptyorder, false);
-    JuliaBuiltinJD.setLinkOrder(emptyorder, false);
-    JITDylibSearchOrder linkorder;
-    linkorder.push_back(
-        {&JuliaBuiltinJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly});
-    linkorder.push_back({&finalJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly});
-    linkorder.push_back(
-        {&JuliaRuntimeJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly});
-    finalJD.setLinkOrder(linkorder, false);
-}
-static void verify_root_type(jl_binding_t *b, jl_value_t *ty)
-{
-    assert(b->constp);
-    assert(jl_isa(b->value, ty));
+    JITDylibSearchOrder linkorder = {
+        {&JuliaFuncJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly},
+        {&JuliaRuntimeJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly},
+        {&JuliaInvalidatedJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly},
+        {&JuliaFallbackJD, orc::JITDylibLookupFlags::MatchExportedSymbolsOnly}};
+    JuliaFuncJD.setLinkOrder(linkorder, false);
 }
 
-
-// root some constant value
-void StaticJuliaJIT::init_constpool()
+std::map<uint64_t, std::string> has_emitted;
+Error StaticJuliaJIT::addJITObject(JITMethodInstanceNode *jitNode, JITDylib &lib)
 {
-    jl_binding_t *stringpool_binding =
-        jl_get_binding(jl_main_module, jl_symbol("StringPool"));
-    assert(stringpool_binding != NULL);
-    // TODO: verify the string pool type...
-    // since we only use global rooted type, there is no need to create GC frame.
-    // jl_box_int64(1);
-    verify_root_type(stringpool_binding, (jl_value_t *)jl_array_type);
-    constpool[StaticJuliaJIT::ConstantType::String] =
-        jl_atomic_load_relaxed(&(stringpool_binding->value));
-
-    jl_binding_t *symbolpool_binding =
-        jl_get_binding(jl_main_module, jl_symbol("SymbolPool"));
-    assert(symbolpool_binding != NULL);
-    // TODO: verify the string pool type...
-    // since we only use global rooted type, there is no need to create GC frame.
-    // jl_box_int64(1);
-    verify_root_type(symbolpool_binding, (jl_value_t *)jl_array_type);
-    constpool[StaticJuliaJIT::ConstantType::Symbol] =
-        jl_atomic_load_relaxed(&(symbolpool_binding->value));
-
-
-    jl_binding_t *bitvalue_pool = jl_get_binding(jl_main_module, jl_symbol("BitValuePool"));
-    assert(bitvalue_pool != NULL);
-    // TODO: verify the string pool type...
-    // since we only use global rooted type, there is no need to create GC frame.
-    // jl_box_int64(1);
-    verify_root_type(bitvalue_pool, (jl_value_t *)jl_array_type);
-    constpool[StaticJuliaJIT::ConstantType::BitValue] =
-        jl_atomic_load_relaxed(&(bitvalue_pool->value));
-}
-
-
-uint8_t decodeChar(char c)
-{
-    assert((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F'));
-    if (c >= '0' && c <= '9') {
-        return (uint8_t)(c - '0');
-    }
-    else {
-        return (uint8_t)(c - 'A' + 10);
-    }
-}
-void decodeBytes(uint8_t *buffer, const char *c, size_t len)
-{
-    assert(strlen(c) >= 2 * len);
-    for (size_t i = 0; i < len; i++) {
-        buffer[i] = (decodeChar(c[2 * i]) << 4) + decodeChar(c[2 * i + 1]);
-    }
-}
-
-const char *decodeImmutableValueInternal(jl_value_t *_dt, const char *bytes,
-                                         uint8_t *buffer, jl_array_t *root)
-{
-    assert(jl_is_immutable_datatype(_dt) && ((jl_datatype_t *)_dt)->isconcretetype);
-    jl_datatype_t *dt = (jl_datatype_t *)_dt;
-    size_t nfields = jl_datatype_nfields(dt);
-    // if dt is a primitive type, we directly copy the value to the buffer
-    if (dt->layout && nfields == 0 && dt != jl_string_type && dt != jl_symbol_type) {
-        size_t byte_num = jl_datatype_size(dt);
-        assert(byte_num > 0);
-        decodeBytes(buffer, bytes, byte_num);
-        return bytes + 2 * byte_num;
-    }
-    else {
-        for (size_t i = 0; i < nfields; i++) {
-            jl_value_t *_fieldtype = jl_svec_ref(dt->types, i);
-            // TODO: what about abstract field type
-            assert(jl_is_datatype(_fieldtype));
-            jl_datatype_t *fieldtype = (jl_datatype_t *)_fieldtype;
-            size_t offset = jl_field_offset(dt, i);
-            if (fieldtype == jl_string_type || fieldtype == jl_symbol_type) {
-                assert(bytes[0] == 'c' || bytes[0] == 's');
-                size_t start = 1;
-                size_t len = 0;
-                char endc;
-                while (1) {
-                    endc = bytes[start];
-                    if (endc != 's' && endc != 'c') {
-                        assert(endc >= '0' && endc <= '9');
-                        len = len * 10 + (endc - '0');
-                    }
-                    else {
-                        break;
-                    }
-                    start += 1;
-                }
-                start += 1;
-                std::vector<uint8_t> sbuffer(len);
-                // decode the string to a buffer
-                decodeBytes(sbuffer.data(), &bytes[start], len);
-                uint64_t ptr;
-                if (endc == 's') {
-                    jl_sym_t *sym = NULL;
-                    JL_GC_PUSH1(&sym);
-                    sym = jl_symbol_n((const char *)sbuffer.data(), len);
-                    jl_array_ptr_1d_push(root, (jl_value_t *)sym);
-                    JL_GC_POP();
-                    ptr = (uint64_t)sym;
-                }
-                else {
-                    jl_value_t *str = NULL;
-                    JL_GC_PUSH1(&str);
-                    str = jl_pchar_to_string((const char *)sbuffer.data(), len);
-                    jl_array_ptr_1d_push(root, str);
-                    JL_GC_POP();
-                    ptr = (uint64_t)str;
-                }
-                // write the pointer to the buffer
-                *(uint64_t *)(buffer + offset) = ptr;
-                bytes = &(bytes[start + 2 * len]);
-                // buffer += 8;
-            }
-            else if (fieldtype->layout && jl_datatype_nfields(fieldtype) == 0) {
-                size_t byte_num = jl_datatype_size(fieldtype);
-                if (byte_num == 0) {
-                    continue;
-                }
-                decodeBytes(&buffer[offset], bytes, byte_num);
-                // consume 2 * bytenum input
-                bytes += byte_num * 2;
-            }
-            else if (jl_is_immutable_datatype(_fieldtype) &&
-                     ((jl_datatype_t *)_fieldtype)->isconcretetype) {
-                bytes =
-                    decodeImmutableValueInternal(_fieldtype, bytes, &buffer[offset], root);
-            }
-            else {
-                // jl_safe_printf("abstract value is not supported!");
-                // 16 is a pointer size;
-                jl_binding_t *bnd =
-                    jl_get_binding(jl_main_module, jl_symbol("SharedString"));
-                *(uint64_t *)(buffer + offset) =
-                    (uint64_t)jl_atomic_load_relaxed(&bnd->value);
-                // decodeBytes(&buffer[offset], bytes, 8);
-                bytes += 16;
-                // jl_error("abstract value is not supported!");
-            }
-        }
-    }
-    return bytes;
-}
-// need to take alignment into consider...
-// maybe just copy code from staticdata.c ?
-// decode value from bytes and write the data to buffer
-jl_value_t *decodeImmutableValue(jl_value_t *_dt, const char *bytes)
-{
-    jl_array_t *root = NULL;
-    JL_GC_PUSH1(&root);
-    root = jl_alloc_array_1d(jl_array_any_type, 0);
-    assert(jl_is_immutable_datatype(_dt) && ((jl_datatype_t *)_dt)->isconcretetype);
-    jl_datatype_t *dt = (jl_datatype_t *)_dt;
-    std::vector<uint8_t> buffer(dt->size);
-    for (size_t i = 0; i < buffer.size(); i++) {
-        buffer[i] = 0;
-    }
-    bytes = decodeImmutableValueInternal(_dt, bytes, (uint8_t *)buffer.data(), root);
-    assert(*bytes == '\0');
-    // jl_value_t* jl_new_v = NULL;
-    jl_value_t *jl_new_v = jl_new_bits(_dt, buffer.data());
-    JL_GC_POP();
-    return jl_new_v;
-}
-uint64_t JuliaRuntimeSymbolGenerator::get_extern_name_addr(std::string &s)
-{
-    // This is corresponds to cgutils.cpp's definition
-    // auto iter = SpecialJuliaRuntimeValue.find(s);
-    // llvm::errs() << "Input: " << s << " " << s.size() << "\n";
-    for (auto i = SpecialJuliaRuntimeValue->begin(); i != SpecialJuliaRuntimeValue->end();
-         i++) {
-        // llvm::errs() << "Check: " << i->first << " " << i->first.size() << "\n";
-        // llvm::errs() << "Result" << i->first.compare(s) << "\n";
-        if (i->first.compare(s) == 0) {
-            return i->second;
-        }
-    }
-    uint64_t offset = 0;
-    const char *dataptr = nullptr;
-    if (startsWith(s, "julia::const::module::")) {
-        offset = strlen("julia::const::module::");
-    }
-    else if (startsWith(s, "julia::const::datatype::")) {
-        offset = strlen("julia::const::datatype::");
-    }
-    else if (startsWith(s, "julia::const::typename::")) {
-        offset = strlen("julia::const::typename::");
-    }
-    else if (startsWith(s, "julia::const::generic_function::")) {
-        offset = strlen("julia::const::generic_function::");
-    }
-    else if (startsWith(s, "julia::const::methodinstance::ROOT")) {
-        /*
-        jl_value_t* comp_module_v = jl_get_binding(jl_core_module, jl_symbol("Compiler"));
-        assert(jl_is_module(comp_module_v));
-        jl_module_t* comp_module = (jl_module_t*)comp_module_v;
-        jl_value_t* root = jl_get_binding(comp_module, jl_symbol("ROOT"));
-        */
-        return 0x5;
-    }
-    else if (startsWith(s, "julia::const::symbol::")) {
-        offset = strlen("julia::const::symbol::");
-        dataptr = s.c_str() + offset;
-        jl_sym_t *newsym;
-        JL_GC_PUSH1(&newsym);
-        newsym = jl_symbol(dataptr);
-        jl_value_t *jl_symbol_pool =
-            jl_StaticJuliaJIT->constpool[StaticJuliaJIT::ConstantType::Symbol];
-        jl_array_ptr_1d_push((jl_array_t *)jl_symbol_pool, (jl_value_t *)newsym);
-        JL_GC_POP();
-        return (uint64_t)newsym;
-    }
-    else if (startsWith(s, "julia::const::singleton::")) {
-        offset = strlen("julia::const::singleton::");
-    }
-    else if (startsWith(s, "julia::const::bitvalue::String::")) {
-        offset = strlen("julia::const::bitvalue::String::");
-        size_t slen = (s.size() - offset) / 2 + 1;
-        dataptr = s.c_str() + offset;
-        std::vector<char> v(slen);
-        for (size_t i = 0; i < slen; i += 1) {
-#define decode(c) ((c) >= 'A' ? (c) - 'A' + 10 : (c) - '0')
-            char c = (decode(dataptr[2 * i]) << 4) + decode(dataptr[2 * i + 1]);
-            v[i] = c;
-#undef decode
-        }
-        v[slen - 1] = '\0';
-        // not quite correct, we need to root the value!
-        // jl_value_t* val = jl_cstr_to_string((const char*)v.data());
-        // jl_cstr_to_string will copy the data, so we don't need to worry about
-        // ownership here
-        jl_value_t *js = NULL;
-        JL_GC_PUSH1(&js);
-        js = jl_cstr_to_string(v.data());
-        jl_value_t *jl_string_pool =
-            jl_StaticJuliaJIT->constpool[StaticJuliaJIT::ConstantType::String];
-        jl_array_ptr_1d_push((jl_array_t *)jl_string_pool, js);
-        JL_GC_POP();
-        return (uint64_t)js;
-    }
-    else if (startsWith(s, "julia::const::bitvalue::")) {
-        std::string remains = s.substr(strlen("julia::const::bitvalue::"));
-        size_t index = remains.find("::");
-        jl_value_t *dt = jl_eval_string(remains.substr(0, index).c_str());
-        // assert(dt != NULL);
-        // offset by "::"
-        jl_value_t *bitv = NULL;
-        JL_GC_PUSH1(&bitv);
-        // not a bitvalue
-        // if (dt == (jl_value_t*)jl_unionall_type || !(jl_is_immutable_datatype(dt) &&
-        // ((jl_datatype_t*)dt)->isconcretetype)){
-        //    return (uint64_t)0x3;
-        //}
-        if (dt == (jl_value_t *)jl_uint64_type) {
-            bitv = decodeImmutableValue(dt, remains.c_str() + index + 2);
-        }
-        else {
-            bitv = decodeImmutableValue(dt, remains.c_str() + index + 2);
-        }
-        if (bitv != nullptr) {
-            jl_array_ptr_1d_push((jl_array_t *)jl_StaticJuliaJIT
-                                     ->constpool[StaticJuliaJIT::ConstantType::BitValue],
-                                 bitv);
-        }
-        JL_GC_POP();
-        return (uint64_t)bitv;
-    }
-    else if (startsWith(s, "julia::const_global::mutable::")) {
-        offset = strlen("julia::const_global::mutable::");
-    }
-    else if (startsWith(s, "julia::globalslot::")) {
-        offset = strlen("julia::globalslot::");
-        size_t modnameend = s.find("::", offset);
-        if (modnameend == s.npos) {
-            jl_printf(JL_STDERR, s.c_str());
-            jl_printf(JL_STDERR, "module is not existed!");
-            assert(0);
-            return (uint64_t)0x3;
-        }
-        std::string modname = s.substr(offset, modnameend - offset);
-        std::string symname = s.substr(modnameend + 2);
-        jl_value_t *v = jl_eval_string(modname.c_str());
-        assert(jl_is_module(v));
-        jl_binding_t *b =
-            jl_get_module_binding((jl_module_t *)v, jl_symbol(symname.c_str()));
-        return (uint64_t)(&(b->value));
-    }
-    else if (startsWith(s, "julia::internal::")) {
-        void *symaddr;
-        const char *libsym = s.c_str() + strlen("julia::internal::");
-        if (!jl_dlsym(jl_libjulia_internal_handle, libsym, &symaddr, 0)) {
-            jl_printf(JL_STDERR, s.c_str());
-            jl_printf(JL_STDERR, "internal symbol not existed!");
-            assert(0);
-        }
-        else {
-            return (uint64_t)(symaddr);
-        }
-    }
-    else if (startsWith(s, "julia::dylib::")) {
-        // external symbol
-        offset = strlen("julia::dylib::");
-        size_t libnameend = s.find("::", offset);
-        if (libnameend == s.npos) {
-            assert(0);
-            return (uint64_t)0x3;
-        }
-        std::string libname_s = s.substr(offset, libnameend - offset);
-        const char *libname = libname_s.c_str();
-        const char *libsym = s.c_str() + libnameend + 2;
-        void *symaddr;
-        void *libhandle = jl_get_library_(libname, 0);
-        if (!libhandle || !jl_dlsym(libhandle, libsym, &symaddr, 0)) {
-            assert(0);
-            return (uint64_t)0x3;
-        }
-        else {
-            return (uint64_t)(symaddr);
-        }
-    }
-    dataptr = s.c_str() + offset;
-    jl_value_t *v = jl_eval_string(dataptr);
-    if (startsWith(s, "julia::const::singleton::")) {
-        // we need to check whether this has instance
-        if (jl_is_datatype(v)) {
-            return (uint64_t)(((jl_datatype_t *)v)->instance);
-        }
-        else {
-            jl_(v);
-            jl_safe_printf("This is incorrect for singelton type!");
-            return 0;
-        }
-    }
-    return (uint64_t)v;
-}
-StaticJuliaJIT *jl_StaticJuliaJIT = nullptr;
-extern "C" JL_DLLEXPORT JITTargetAddress jl_lookup(jl_value_t *symbol)
-{
-    assert(jl_isa(symbol, (jl_value_t *)jl_symbol_type));
-    if (jl_StaticJuliaJIT == nullptr) {
-        jl_StaticJuliaJIT = new StaticJuliaJIT();
-    }
-    SymbolStringPtr namerefptr =
-        jl_StaticJuliaJIT->ES.intern(StringRef(jl_symbol_name((jl_sym_t *)symbol)));
-    auto symOrErr = jl_StaticJuliaJIT->ES.lookup(
-        {/*&jl_StaticJuliaJIT->JuliaBuiltinJD,*/
-         &jl_StaticJuliaJIT->finalJD,
-         /*&jl_StaticJuliaJIT->JuliaRuntimeJD*/},
-        namerefptr);
-    if (auto Err = symOrErr.takeError()) {
-        llvm::errs() << Err;
-        jl_error("shouldn't be here");
-        return 0;
-    }
-    else {
-        // auto table = jl_StaticJuliaJIT->JuliaRuntimeJD.Symbols;
-        /*
-        for (auto i = table.begin();i != table.end();i++){
-            std::cout << *(*i->first).str();
-            llvm::orc::JITDylib::Sym entry = (*i->second);
-            std::cout << (int)(getState());
-            std::cout << i->
-        }
-        */
-        return symOrErr.get().getAddress();
-    }
-}
-
-extern void jl_init_staticjit()
-{
-    if (jl_StaticJuliaJIT == nullptr) {
-        jl_StaticJuliaJIT = new StaticJuliaJIT();
-        SpecialJuliaRuntimeValue = new std::vector<std::pair<std::string, uint64_t>>(
-            {{"julia::const::bool::true", (uint64_t)jl_true},
-             {"julia::const::bool::false", (uint64_t)jl_false}});
-    }
-}
-extern "C" JL_DLLEXPORT void jl_compile_objects(jl_value_t *objectfilearray)
-{
-    jl_init_staticjit();
-    assert(jl_subtype(jl_typeof(objectfilearray), (jl_value_t *)jl_array_type));
-    std::vector<std::string> objectfiles;
-    for (unsigned int i = 0; i < jl_array_len(objectfilearray); i++) {
-        jl_value_t *item = jl_arrayref((jl_array_t *)objectfilearray, i);
-        assert(jl_typeof(item) == (jl_value_t *)jl_string_type);
-        const char *ptr = jl_string_data(item);
-        std::string s(ptr);
-        objectfiles.push_back(std::move(s));
-    }
-    // std::make_unique<llvm::orc::IRCompileLayer>(this) is used to call this() to compile
-    // IR code;
-    // llvm::orc::IRCompileLayer CompileLayer(
-    //    ES, ObjectLayer, std::make_unique<llvm::orc::IRCompileLayer>(this));
-    // we can directly construct a JITDylib by ES and name!
-    // but the link order of this JITDylib is default to itself. And we need to manage the
-    // memory by ourself.
-
-    // finalJD.setLinkOrder(std::move(JITDylibSearchOrder),true);
-    // if we know the link order of the object files, we can build a JITDylib for each
-    // object and link them manually
     /*
-        Consider this case:
-            Suppose that we have object file one with `f` call `g`, f defined, and object
-       file two with `g` call `f`, g defined. We have one JITDylib and two materialization
-       unit. When we materialize first object file, it will resolve address of f and then
-       look up symbol g in the second object file, The lookup will trigger materialization
-       of second object file, which produce the address of f and it will look up the address
-       of symbol f in first object file, which we already have.
-    */
-    for (unsigned int i = 0; i < objectfiles.size(); i++) {
-        std::string &filename = objectfiles[i];
-        StringRef sref(filename);
-        auto objorerr = object::ObjectFile::createObjectFile(sref);
-        if (Error Err = objorerr.takeError()) {
-            // printf("Encounter error while loading object file!");
-            llvm::errs() << Err;
-            jl_error("shouldn't be here");
+    Currenly unused, the m is miscalculated anyway
+    jl_module_t *m = jl_main_module;
+    if (!jitNode->isToplevel){
+        if (mi->def.method != nullptr) {
+            m = mi->def.method->module;
         }
-        auto obj = objorerr.get().takeBinary();
-        std::unique_ptr<llvm::object::ObjectFile> objfile = std::move(std::get<0>(obj));
-        std::unique_ptr<llvm::MemoryBuffer> membuf = std::move(std::get<1>(obj));
-        // MemoryBufferRef ObjBuffer = membuf->getMemBufferRef();
-        addobject(jl_StaticJuliaJIT->ObjectLayer, jl_StaticJuliaJIT->finalJD,
-                  std::move(objfile), std::move(membuf));
-        // then we load objfile into memory by ObjectLayer
-        // it seems that we can only add LLVM IR into IRCompilerLayer
-        // or add LinkGraph into ObjectLinkLayer, or directly emit an object file.
-        // What about a RtDyldObjectLinkingLayer
-        // It seems that it's designed for object with relocatable section?
-        // auto Ctx =
-        // std::make_unique<llvm::orc::ObjectLinkingLayerJITLinkContext>(ObjectLayer,
-        // std::move(R), std::move(O)); if (auto G = createLinkGraphFromObject(ObjBuffer)) {
-        // Ctx->notifyMaterializing(**G);
-        //}
+    }
+    */
+    // Implicitly merge of symbol table, which might be bad
+    generator->registerDependencies(/* m ,*/jitNode->symbolTable);
+    return addObjectInternal(ObjectLayer, lib,
+                             std::unique_ptr<JuliaObjectFile>(new JuliaObjectFile(
+                                 nullptr, /* dep, */ std::move(jitNode->buffer))));
+};
+
+Error StaticJuliaJIT::addCachedObject(CachedMethodInstanceNode *cacheNode, JITDylib &lib)
+{
+    assert(!cacheNode->hasEmitted());
+    cacheNode->setEmitted();
+    generator->registerDependencies(/* m ,*/ std::move(cacheNode->symbolTable));
+    return addObjectInternal(ObjectLayer, lib,
+                             // Currently JL_Module unused, should be fine
+                             std::unique_ptr<JuliaObjectFile>(new JuliaObjectFile(
+                                 nullptr, /* dep, */ std::move(cacheNode->buffer))));
+};
+
+// This function is part of cache implementation, don't invoke this function arbitarily
+llvm::Expected<void *> StaticJuliaJIT::tryLookupSymbol(std::string &name)
+{
+    SymbolStringPtr namerefptr = ES.intern(StringRef(name));
+    auto symOrErr = ES.lookup({&JuliaFuncJD}, namerefptr);
+    auto Err = symOrErr.takeError();
+    // In our new implementation, err can only happen when symbol resolution has error
+    // That is, maybe our symbol table is error.
+    // Let's ignore this now (TODO : make error more robust)
+    // The essential problem here is that we don't know how LLVM handle symbol resolution
+    // error.
+    if (!Err) {
+        auto addr = symOrErr.get().getAddress();
+        has_emitted[addr] = name;
+        return (void *)addr;
+    }
+    else {
+        assert(JuliaFuncJD.remove({namerefptr}));
+        return Err;
+    }
+}
+
+llvm::Expected<void *> StaticJuliaJIT::getFunctionPointerInternal(jl_method_instance_t *mi,
+                                                                  size_t world,
+                                                                  GeneratedPointerType pty)
+{
+    std::string fname;
+    if (pty == InvokePointer) {
+        fname = "julia::method::invoke::";
+    }
+    else {
+        fname = "julia::method::specfunc::";
+    }
+    llvm::raw_string_ostream(fname) << name_from_method_instance(mi);
+    // TODO : test whether cache is emitted! we need to emit cache!!!!!
+    MethodInstanceNode *miNode = cacheGraph.lookUpNode(mi);
+    if (miNode != nullptr) {
+        if (auto cacheNode = dyn_cast<CachedMethodInstanceNode>(miNode)) {
+            if (!cacheNode->hasEmitted()){
+                cacheGraph.emitCachedMethodInstanceNode(cacheNode);
+            }
+        }
+        // must be compiled at this point
+        return std::move(tryLookupSymbol(fname));
+    }
+    else {
+        compileMethodInstanceCached(mi, world);
+        // TODO : be careful of this function, actually it's better to remove it after
+        // looking up but currently we already emit object file after
+        // compileMethodInstanceCached, so not a big deal.
+        cacheGraph.detachIfToplevelMethodInstance(mi);
+        return std::move(tryLookupSymbol(fname));
     }
 }
 
 
-char *outputdir = NULL;
-extern "C" JL_DLLEXPORT void jl_setoutput_dir(jl_value_t *dir)
+void StaticJuliaJIT::removeUnusedExternal(llvm::Module *M)
 {
-    assert(jl_is_string(dir));
-    outputdir = (char *)jl_string_ptr(dir);
+    for (auto I = M->global_objects().begin(), E = M->global_objects().end(); I != E;) {
+        GlobalObject *F = &*I;
+        ++I;
+        if (F->isDeclaration()) {
+            if (F->use_empty()) {
+                F->eraseFromParent();
+            }
+        }
+    }
 }
-extern std::pair<std::unique_ptr<Module>, jl_llvm_functions_t>
-emit_function(jl_method_instance_t *lam, jl_code_info_t *src, jl_value_t *jlrettype,
-              jl_codegen_params_t &params, bool vaOverride = false);
-extern int8_t jl_force_object_gen;
-std::map<jl_method_instance_t *, std::tuple<std::vector<jl_method_instance_t *>, uint64_t>>
-    has_emitted;
-
-// Reuse optimizer from jitlayer.cpp
-static int UniqueID = 0;
-extern void addTargetPasses(legacy::PassManagerBase *PM, TargetMachine *TM);
-extern void addMachinePasses(legacy::PassManagerBase *PM, TargetMachine *TM);
-extern void addOptimizationPasses(legacy::PassManagerBase *PM, int opt_level,
-                                  bool lower_intrinsics, bool dump_native);
 
 /*
-    Find the unique cached code instance for a method instance. If there are more than one, raise a warning.
-    This is to prevent bad cache and we only use method instance for codegen instead of code instance.
-    So a one-to-one corresponding is importance here.
-    We must be careful about Julia's GC and ensure all the data are correctly rooted.
+    Find the unique cached code instance for a method instance. If there are more than one,
+   raise a warning. This is to prevent bad cache and we only use method instance for codegen
+   instead of code instance. So a one-to-one corresponding is importance here. We must be
+   careful about Julia's GC and ensure all the data are correctly rooted.
 */
 static jl_code_instance_t *jl_unique_rettype_inferred(jl_method_instance_t *mi,
                                                       size_t min_world, size_t max_world)
@@ -816,8 +266,8 @@ static jl_code_instance_t *jl_unique_rettype_inferred(jl_method_instance_t *mi,
                 if (ci != NULL) {
                     jl_safe_printf(
                         "Warning: More than one matched code instance! (maybe some bootstraped code?)");
-                    //jl_(ci);
-                    //jl_(codeinst);
+                    // jl_(ci);
+                    // jl_(codeinst);
                 }
                 ci = codeinst;
             }
@@ -827,8 +277,7 @@ static jl_code_instance_t *jl_unique_rettype_inferred(jl_method_instance_t *mi,
     return ci;
 }
 
-
-// A convenience helper to prepare code instance for every subroutine 
+// A convenience helper to prepare code instance for every subroutine
 static jl_code_instance_t *prepare_code_instance(jl_method_instance_t *mi, size_t world)
 {
     jl_code_info_t *src = NULL;
@@ -843,7 +292,9 @@ static jl_code_instance_t *prepare_code_instance(jl_method_instance_t *mi, size_
     // we have no cached codeinst, create a new one
     // inferred codeinst needs inferred code info to determine return type and other
     // properties
-    assert(jl_is_method(mi->def.method) && jl_symbol_name(mi->def.method->name)[0] != '@');
+    assert(
+        (jl_is_method(mi->def.method) && jl_symbol_name(mi->def.method->name)[0] != '@') ||
+        jl_is_module(mi->def.module));
     // now we perform type inference
     // It seems that we need to call type inference multiple time if we don't cache the
     // inferred IR.
@@ -867,37 +318,96 @@ static jl_code_instance_t *prepare_code_instance(jl_method_instance_t *mi, size_
     return lookup_codeinst;
 }
 
-void removeUnusedExternal(llvm::Module *M)
+void StaticJuliaJIT::compileMethodInstancePatched(jl_method_instance_t* mi, CachedMethodInstanceNode* cacheNode, size_t world)
 {
-    for (auto I = M->global_objects().begin(), E = M->global_objects().end(); I != E;) {
-        GlobalObject *F = &*I;
-        ++I;
-        if (F->isDeclaration()) {
-            if (F->use_empty()) {
-                F->eraseFromParent();
-            }
-        }
+    assert(!cacheNode->hasEmitted());
+    jl_code_instance_t *ci = prepare_code_instance(mi, world);
+    jl_value_t *src = NULL;
+    JL_GC_PUSH1(&src);
+    src = ci->inferred;
+    // Reinfer the function to get code info
+    assert(src != NULL);
+    if (src == jl_nothing) {
+        src = (jl_value_t *)jl_type_infer(ci->def, world, 0);
+        assert(src != jl_nothing && jl_is_code_info(src));
     }
+    src = (jl_value_t *)jl_uncompress_ir(mi->def.method, ci, (jl_array_t *)src);
+    // compile current method instance
+    jl_codegen_params_t params;
+    // prevent Julia uses cache internally
+    params.cache = false;
+    params.world = world;
+    jl_compile_result_t result =
+        emit_function(mi, (jl_code_info_t *)src, ci->rettype, params);
+    JL_GC_POP();
+    std::unique_ptr<llvm::Module> mod = std::move(std::get<0>(result));
+    removeUnusedExternal(mod.get());
+    PM.run(*mod);
+    removeUnusedExternal(mod.get());
+    // now we need to add object buffer
+    llvm::SmallVector<char, 0U> emptyBuffer;
+    obj_Buffer.swap(emptyBuffer);
+    std::unique_ptr<llvm::MemoryBuffer> ObjBuffer(
+        new SmallVectorMemoryBuffer(std::move(emptyBuffer)));
+    cacheNode->buffer = std::move(ObjBuffer);
+    assert(cacheNode->symbolTable);
+    assert(!addCachedObject(cacheNode, JuliaFuncJD));
 }
 
-// Currently this function is not used
-// Since we haven't bundle object files into static libraries.
-/*
-static object::Archive::Kind getDefaultForHost(Triple &triple)
+void StaticJuliaJIT::compileMethodInstanceCached(jl_method_instance_t *mi, size_t world,
+                                                 JITMethodInstanceNode *parentNode)
 {
-    if (triple.isOSDarwin())
-        return object::Archive::K_DARWIN;
-    return object::Archive::K_GNU;
+    // We have to use a parentNode here to ensure the correctness
+    // this is because we need to root the children before parent finish compiling
+    // Consider this scenario:
+    // f -> g and g -> f, we compile f, then we compile g, if we didn't mark g as f's
+    // dependency before we call markNoMoreDeps on g we will encounter error
+
+    // Firstly we test whether this method instance is already compiled
+    MethodInstanceNode *cacheNode = cacheGraph.lookUpNode(mi);
+    if (cacheNode != nullptr) {
+        if (parentNode != nullptr) {
+            cacheGraph.addChild(parentNode, cacheNode);
+        }
+        return;
+    }
+    JITMethodInstanceNode *miNode = cacheGraph.createJITMethodInstanceNode(mi);
+    if (parentNode != nullptr) {
+        cacheGraph.addChild(parentNode, (MethodInstanceNode *)miNode);
+    }
+    // Otherwise we prepare to compile the method instance
+    jl_code_instance_t *ci = prepare_code_instance(mi, world);
+    jl_value_t *src = NULL;
+    JL_GC_PUSH1(&src);
+    src = ci->inferred;
+    // Reinfer the function to get code info
+    assert(src != NULL);
+    if (src == jl_nothing) {
+        src = (jl_value_t *)jl_type_infer(ci->def, world, 0);
+        assert(src != jl_nothing && jl_is_code_info(src));
+    }
+    src = (jl_value_t *)jl_uncompress_ir(mi->def.method, ci, (jl_array_t *)src);
+    // compile current method instance
+    jl_codegen_params_t params;
+    // prevent Julia uses cache internally
+    params.cache = false;
+    params.world = world;
+    jl_compile_result_t result =
+        emit_function(mi, (jl_code_info_t *)src, ci->rettype, params);
+    JL_GC_POP();
+    assert(std::get<0>(result));
+    cacheGraph.installCompiledOutput(miNode, std::move(std::get<0>(result)));
+    while (!params.workqueue.empty()) {
+        jl_code_instance_t *subci = std::get<0>(params.workqueue.back());
+        compileMethodInstanceCached(subci->def, world, miNode);
+        params.workqueue.pop_back();
+    }
+    cacheGraph.markNoMoreDeps(miNode);
 }
-*/
-extern "C" JL_DLLEXPORT void jl_compile_methodinst_recursively(jl_method_instance_t *mi,
-                                                               char *dir, size_t world,
-                                                               bool recur)
+
+/*
+void StaticJuliaJIT::compileMethodInstance(jl_method_instance_t *mi, size_t world)
 {
-    jl_init_staticjit();
-    // store all the object files into a directory
-    const char *dirname = dir;
-    std::vector<jl_code_instance_t *> workqueue;
     // Step 1 : Prepare code instance for all the functions we may use during codegen.
     // we forcly infer the entry function, to ensure every subroutine it calls has an
     // associated code instance. This is required by emit_invoke, since it will lookup code
@@ -908,26 +418,36 @@ extern "C" JL_DLLEXPORT void jl_compile_methodinst_recursively(jl_method_instanc
     // then we succeed. Otherwise we need to generate type inferred code info and use
     // information from it to create new code instance.
     jl_code_instance_t *first_codeinst = prepare_code_instance(mi, world);
-    workqueue.push_back(first_codeinst);
+    std::vector<jl_code_instance_t *> workqueue = {first_codeinst};
     llvm::legacy::PassManager &PM = jl_StaticJuliaJIT->PM;
-    // step 2: work on workqueue
+    std::vector<std::unique_ptr<MemoryBuffer>> temporaryBuffer;
+    // Prevent object files being added to JIT repeatly
+    UniqueVector<jl_method_instance_t*> hasCompiled;
     while (!workqueue.empty()) {
         jl_code_instance_t *curr_codeinst = workqueue.back();
         workqueue.pop_back();
+        jl_method_instance_t *curr_methinst = curr_codeinst->def;
+        if (hasCompiled.has(curr_methinst)){
+            continue;
+        }
+        // Step one: use unsafe cache of static jit compiler
+        void* ptr1 = probeInvokePointer(curr_methinst, world);
+        //miName = "julia::method::specfunc::";
+        //llvm::raw_string_ostream(miName) << name_from_method_instance(curr_methinst);
+        //void* ptr2 = tryLookupSymbol(miName);
+        if (ptr1 != nullptr){
+            continue;
+        }
         jl_code_instance_t *new_curr_codeinst =
-            prepare_code_instance(curr_codeinst->def, world);
+            prepare_code_instance(curr_methinst, world);
         // In some rare cases this will happen for bootstrap code. Raise a warning here.
         if (new_curr_codeinst != curr_codeinst) {
-            //jl_(new_curr_codeinst);
-            //jl_(curr_codeinst);
+            // jl_(new_curr_codeinst);
+            // jl_(curr_codeinst);
             jl_safe_printf("Two different code instance, Shouldn't be uninferred!");
             curr_codeinst = new_curr_codeinst;
         }
-        jl_method_instance_t *curr_methinst = curr_codeinst->def;
-        // if we have emitted the code, skip this method instance;
-        if (has_emitted.find(curr_methinst) != has_emitted.end()) {
-            continue;
-        }
+        curr_methinst = curr_codeinst->def;
         if (curr_codeinst->inferred == NULL || (jl_value_t *)curr_codeinst == jl_nothing) {
             jl_(curr_codeinst);
             jl_error("Shouldn't be uninferred!");
@@ -957,79 +477,416 @@ extern "C" JL_DLLEXPORT void jl_compile_methodinst_recursively(jl_method_instanc
         JL_GC_POP();
         // the call target is in params.workqueue, we record the dependency in emitted
         // map;
-        std::vector<jl_method_instance_t *> call_targets;
         while (!params.workqueue.empty()) {
-            jl_method_instance_t *target = std::get<0>(params.workqueue.back())->def;
-            workqueue.push_back(std::get<0>(params.workqueue.back()));
-            call_targets.push_back(target);
+            jl_code_instance_t* subci = std::get<0>(params.workqueue.back());
+            if (!hasCompiled.has(subci->def)){
+                workqueue.push_back(subci);
+            }
             params.workqueue.pop_back();
         }
-        // emitted[curr_meth_inst] = call_targets;
-        // emit module!
         std::unique_ptr<llvm::Module> mod = std::move(std::get<0>(result));
         removeUnusedExternal(mod.get());
-        std::string s = "";
-        // trunc the long filename. We maybe need to use hash (MD5) to store file.
-        // long symbol names with special symbols in object file and LLVM module are fine.
-        llvm::raw_string_ostream(s)
-            << dirname << "/" << UniqueID << std::get<1>(result).specFunctionObject;
-        UniqueID += 1;
-        std::string s1 = s.substr(0, 200);
-        s1 += ".ll";
-        llvm::StringRef sref1(s1);
-        std::error_code ec;
-        llvm::raw_fd_ostream fos1(sref1, ec);
-        mod->print(fos1, nullptr);
-        fos1.close();
+        (void)writeOutput(mod.get(), curr_methinst, UnoptIR);
         // run pass can trigger undefine symbol error, so we need to emit external
         // symbol correctly this will also emit object file to objOS
-        /*
-            We should add a IR verification pass here, since sometimes imagecodegen will produce incorrect IR.
-            But verifyModule doesn't work, it seems that strict check can only happen if we try to parse LLVM IR (or use a debug version of LLVM).
-        }
-        */
+
+        //    We should add a IR verification pass here, since sometimes imagecodegen will
+        //produce incorrect IR. But verifyModule doesn't work, it seems that strict check
+can
+        //only happen if we try to parse LLVM IR (or use a debug version of LLVM).
+        //}
+
         PM.run(*mod);
         removeUnusedExternal(mod.get());
-        std::string s2 = s.substr(0, 200) + "-optimize.ll";
-        llvm::StringRef sref2(s2);
-        llvm::raw_fd_ostream fos2(sref2, ec);
-        mod->print(fos2, nullptr);
-        fos2.close();
+        (void)writeOutput(mod.get(), curr_methinst, OptIR);
+        (void)writeOutput(mod.get(), curr_methinst, ObjFile);
+        // now we need to add object buffer
         llvm::SmallVector<char, 0U> emptyBuffer;
-        jl_StaticJuliaJIT->obj_Buffer.swap(emptyBuffer);
-        {
-            std::string s3 = s.substr(0, 200) + ".o";
-            std::ofstream file(s3, std::ios::binary);
-            file.write(emptyBuffer.data(), emptyBuffer.size());
-        }
-        std::unique_ptr<MemoryBuffer> ObjBuffer(
-            new SmallVectorMemoryBuffer(std::move(emptyBuffer)));
+        obj_Buffer.swap(emptyBuffer);
+        temporaryBuffer.emplace_back(new SmallVectorMemoryBuffer(std::move(emptyBuffer)));
+        hasCompiled.push_back(curr_methinst);
+    }
+    for (size_t i = 0;i < temporaryBuffer.size();i++){
+        auto ObjBuffer = std::move(temporaryBuffer[i]);
         auto objorerr = object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef());
         if (Error Err = objorerr.takeError()) {
             llvm::errs() << Err;
-            jl_error("shouldn't be here");
+            jl_error("Unable to create object files!");
         }
         std::unique_ptr<llvm::object::ObjectFile> objfile = std::move(objorerr.get());
-        // MemoryBufferRef ObjBuffer = membuf->getMemBufferRef();
-        /*
-        llvm::MemoryBufferRef mbref(objfile.get()->getData(), name_from_method_instance());
-        llvm::NewArchiveMember mem(mbref);
-        llvm::ArrayRef<llvm::NewArchiveMember> ref(men);
-        llvm::object::Archive::Kind Kind =
-        getDefaultForHost(jl_StaticJuliaJIT->TM->getTargetTriple());
-        writeArchive(StringRef(s3),ref, true, Kind, true, false);
-        */
-        addobject(jl_StaticJuliaJIT->ObjectLayer, jl_StaticJuliaJIT->finalJD,
-                  std::move(objfile), std::move(ObjBuffer));
-        has_emitted[curr_methinst] =
-            std::make_tuple<std::vector<jl_method_instance_t *>, uint64_t>(
-                std::move(call_targets), 0);
-        if (!recur) {
-            break;
-        }
+        (void)addObject(std::move(objfile), std::move(ObjBuffer));
+
+    }
+    auto& q = hasCompiled.queue;
+    for (auto i = (int)q.size()-1;i >-1;i--){
+        auto ptr1 = probeInvokePointer(q[i], world);
+        assert(ptr1 != nullptr);
     }
     return;
 }
+*/
+static void verify_root_type(jl_binding_t *b, jl_value_t *ty)
+{
+    assert(b->constp);
+    assert(jl_isa(b->value, ty));
+}
+
+
+// root some constant value
+void StaticJuliaJIT::initConstPool()
+{
+    jl_binding_t *stringpool_binding =
+        jl_get_binding(jl_main_module, jl_symbol("StringPool"));
+    assert(stringpool_binding != NULL);
+    // TODO: verify the string pool type...
+    // since we only use global rooted type, there is no need to create GC frame.
+    // jl_box_int64(1);
+    // verify_root_type(stringpool_binding, (jl_value_t *)jl_array_type);
+    constpool[StaticJuliaJIT::ConstantType::String] =
+        jl_atomic_load_relaxed(&(stringpool_binding->value));
+
+    jl_binding_t *symbolpool_binding =
+        jl_get_binding(jl_main_module, jl_symbol("SymbolPool"));
+    assert(symbolpool_binding != NULL);
+    // TODO: verify the string pool type...
+    // since we only use global rooted type, there is no need to create GC frame.
+    // jl_box_int64(1);
+    // verify_root_type(symbolpool_binding, (jl_value_t *)jl_array_type);
+    constpool[StaticJuliaJIT::ConstantType::Symbol] =
+        jl_atomic_load_relaxed(&(symbolpool_binding->value));
+
+
+    jl_binding_t *bitvalue_pool = jl_get_binding(jl_main_module, jl_symbol("BitValuePool"));
+    assert(bitvalue_pool != NULL);
+    // TODO: verify the string pool type...
+    // since we only use global rooted type, there is no need to create GC frame.
+    // jl_box_int64(1);
+    // verify_root_type(bitvalue_pool, (jl_value_t *)jl_array_type);
+    constpool[StaticJuliaJIT::ConstantType::BitValue] =
+        jl_atomic_load_relaxed(&(bitvalue_pool->value));
+
+    jl_binding_t *type_pool = jl_get_binding(jl_main_module, jl_symbol("TypePool"));
+    assert(type_pool != NULL);
+    // TODO: verify the string pool type...
+    // since we only use global rooted type, there is no need to create GC frame.
+    // jl_box_int64(1);
+    // verify_root_type(type_pool, (jl_value_t *)jl_array_type);
+    constpool[StaticJuliaJIT::ConstantType::Type] =
+        jl_atomic_load_relaxed(&(type_pool->value));
+
+    jl_binding_t *mbnd = jl_get_binding(jl_main_module, jl_symbol("MethodBlacklist"));
+    assert(mbnd != NULL);
+    // TODO: verify the string pool type...
+    // since we only use global rooted type, there is no need to create GC frame.
+    // jl_box_int64(1);
+    MethodBlacklist = jl_atomic_load_relaxed(&(mbnd->value));
+}
+
+#ifndef HAVE_SSP
+extern JL_DLLEXPORT void __stack_chk_fail(void);
+#endif
+
+/*
+extern "C" JL_DLLEXPORT JITTargetAddress jl_tryLookupSymbol(jl_value_t *symbol)
+{
+    std::string sname = jl_symbol_name_((jl_sym_t *)symbol);
+    return (JITTargetAddress)jl_StaticJuliaJIT->tryLookupSymbol(sname);
+}
+*/
+std::set<jl_method_instance_t *> invalidated_method_instance;
+extern void (*invalid_compiled_cache_handle)(jl_method_instance_t *);
+void invalidate_cache(jl_method_instance_t *mi)
+{
+    invalidated_method_instance.insert(mi);
+}
+
+extern "C" JL_DLLEXPORT void jl_setoutput_dir(jl_value_t *dir)
+{
+    assert(jl_is_string(dir));
+    std::string root = (char *)jl_string_ptr(dir);
+    jl_StaticJuliaJIT->needCacheOutput = true;
+    jl_StaticJuliaJIT->opg.setRootPath(root);
+}
+
+extern "C" JL_DLLEXPORT void jl_disable_output()
+{
+    jl_StaticJuliaJIT->needCacheOutput = false;
+}
+
+extern "C" JL_DLLEXPORT void jl_init_staticjit(jl_value_t* outDir)
+{
+    assert(jl_is_string(outDir));
+    assert(jl_StaticJuliaJIT == nullptr);
+    jl_StaticJuliaJIT = new StaticJuliaJIT();
+    jl_setoutput_dir(outDir);
+}
+
+void StaticJuliaJIT::addStaticLib(std::string libPath, std::vector<JuliaLibConfig> &configs)
+{
+    ErrorOr<std::unique_ptr<MemoryBuffer>> FileOrErr =
+        MemoryBuffer::getFile(StringRef(libPath));
+    if (std::error_code EC = FileOrErr.getError()) {
+        jl_error("Unable to open archive file");
+    }
+    llvm::Error err = Error::success();
+    llvm::object::Archive ar(FileOrErr.get().get()->getMemBufferRef(), err);
+    assert(!err);
+    std::unordered_map<std::string, llvm::object::Archive::Child> objects;
+    for (auto &ch : ar.children(err)) {
+        if (err){
+            assert(0);
+        }
+        if (auto eName = ch.getName()){
+            std::string name = eName.get().str();
+            objects.insert({name, ch}); 
+        }
+        else{
+            assert(0);
+        }
+    }
+    assert(!err);
+    for (auto &config : configs) {
+        // If the object file is a cached one, we check whether the object file is indeed
+        // cached in the Graph.
+        if (config.isCached) {
+            auto miNode = cacheGraph.lookUpNode(config.miName);
+            if (miNode == nullptr) {
+                llvm::errs() << "Cached object " << config.miName << " doesn't exist\n";
+                llvm::errs() << "Do you forget to load it?";
+                auto cacheNode = dyn_cast<CachedMethodInstanceNode>(miNode);
+                assert(cacheNode);
+                assert(cacheNode->hasEmitted());
+            }
+        }
+        // If we need to load an uncached invalidated object file, we should invoke JIT to
+        // emit one.
+        else if (!config.isRelocatable) {
+            if (cacheGraph.lookUpNode(config.miName)){
+                // already compiled, do nothing here
+                continue;
+            }
+            assert(config.mi != nullptr);
+            auto cacheNode = cacheGraph.createPatchedMethodInstanceNode(config.miName, libPath, config.objFileName);
+            compileMethodInstancePatched(config.mi, cacheNode, jl_world_counter);
+        }
+        else {
+            // Otherwise we simply load the object file into JIT.
+            // If the miNode is already compiled, ignore it
+            if (cacheGraph.lookUpNode(config.miName)){
+                continue;
+            }
+            auto iter = objects.find(config.objFileName);
+            assert(iter != objects.end());
+            auto &ch = iter->second;
+            // How to deal with symbol tables ???
+            // where should the symbol tables sit!
+            auto membufRef = ch.getMemoryBufferRef();
+            if (!membufRef){
+                assert(0);
+            }
+            auto membuf =
+                llvm::MemoryBuffer::getMemBufferCopy(membufRef->getBuffer());
+            auto cacheNode = cacheGraph.createUnemittedCachedMethodInstanceNode(
+                config.miName, libPath, iter->first, std::move(config.externalSymbols),
+                std::move(membuf));
+            assert(!addCachedObject(cacheNode, JuliaFuncJD));
+        }
+    }
+}
+
+extern void *decodeJuliaValue(jl_module_t *mod, std::string &str);
+
+#define hex2uint8(h) (((h) >= 'A') ? ((h) - 'A' + 10) : (h - '0'))
+
+void decodeInputString(std::string &str)
+{
+    std::string decodeStr(str.size() / 2, 0);
+    assert(str.size() % 2 == 0);
+    char *ptr = &decodeStr[0];
+    for (size_t i = 0; i < str.size() / 2; i++) {
+        // little endianness
+        ptr[i] = (hex2uint8(str[2 * i + 1]) << 4) + hex2uint8(str[2 * i]);
+    }
+    str = decodeStr;
+}
+#undef hex2uint8
+
+std::vector<JuliaLibConfig> openConfig(std::string path)
+{
+    std::ifstream fs;
+    fs.open(path);
+    std::vector<JuliaLibConfig> configs;
+    std::string nodeTypeString;
+    int nodeType;
+    std::string miName;
+    while (1) {
+        JuliaLibConfig config;
+        std::getline(fs, nodeTypeString);
+        // try to read a new line to see whether we have more item
+        if (fs.eof() || nodeTypeString.size() == 0) {
+            break;
+        }
+        std::getline(fs, miName);
+        decodeInputString(miName);
+        config.miName = miName;
+        assert(nodeTypeString.size() == 1);
+        nodeType = nodeTypeString[0] - '0';
+        if (nodeType == 0){
+            std::string isRelocatableString;
+            std::getline(fs, isRelocatableString);
+            bool isRelocatable = isRelocatableString[0] == '1';
+            config.miName = miName;
+            config.isRelocatable = isRelocatable;
+            config.isCached = false;
+            jl_value_t *mi = nullptr;
+            if (!isRelocatable){
+                std::string typeString;
+                std::getline(fs, typeString);
+                jl_value_t **args;
+                JL_GC_PUSHARGS(args, 3);
+                args[0] = jl_atomic_load_relaxed(&(jl_get_binding(jl_main_module, jl_symbol("lookUpMethodInstance"))->value));
+                args[1] = (jl_value_t *)decodeJuliaValue(jl_main_module, typeString);
+                args[2] = jl_box_uint64(jl_world_counter);
+                mi = jl_apply(args, 3);
+                assert(jl_is_method_instance(mi));
+                JL_GC_POP();
+            }
+            config.mi = (jl_method_instance_t*)mi;
+            std::string objFileName;
+            std::getline(fs, objFileName);
+            decodeInputString(objFileName);
+            config.objFileName = objFileName;
+            std::string pairNumString;
+            std::getline(fs, pairNumString);
+            size_t pairNum = 0;
+            for (auto i = pairNumString.begin(); i!= pairNumString.end(); i++){
+                char c = *i;
+                pairNum = 10 * pairNum + (c - '0');
+            }
+            SymbolTable externalSymbols;
+            for (size_t i = 0; i < pairNum; i++) {
+                std::pair<std::string, std::string> p;
+                std::getline(fs, p.first, '\t');
+                decodeInputString(p.first);
+                std::getline(fs, p.second);
+                externalSymbols.insert(p);
+            }
+            config.externalSymbols = std::move(std::make_unique<SymbolTable>(std::move(externalSymbols)));
+            configs.push_back(std::move(config));
+        }  
+        else if (nodeType == 1){
+            std::string libName;
+            std::string objName;
+            std::getline(fs, libName);
+            decodeInputString(libName);
+            std::getline(fs, objName);
+            decodeInputString(objName);
+        }
+        /*
+        else if (nodeType == 2){
+            std::string pluginName;
+            std::getline(fs, pluginName);
+            decodeInputString(pluginName);
+            assert(0);
+        }
+        */
+        else{
+            assert(0);
+        }
+    }
+    fs.close();
+    return configs;
+}
+
+extern "C" JL_DLLEXPORT void jl_add_static_libs(jl_value_t *objectfilearray)
+{
+    assert(jl_StaticJuliaJIT != nullptr);
+    assert(jl_subtype(jl_typeof(objectfilearray), (jl_value_t *)jl_array_type));
+    std::vector<std::string> objectfiles;
+    for (unsigned int i = 0; i < jl_array_len(objectfilearray); i++) {
+        jl_value_t *item = jl_arrayref((jl_array_t *)objectfilearray, i);
+        assert(jl_is_tuple(item));
+        std::string libPath = jl_string_ptr(jl_fieldref(item, 0));
+        std::string configPath = jl_string_ptr(jl_fieldref(item, 1));
+        std::vector<JuliaLibConfig> configs = openConfig(configPath);
+        jl_StaticJuliaJIT->addStaticLib(libPath, configs);
+    }
+}
+
+/*
+void loadStaticLib(StaticJuliaJIT* jit, llvm::object::Archive& ar, std::map<std::string,
+JuliaLibConfig>& config){ for (auto& Child:ar.children()){ auto childName = Child.getName();
+        assert(childName);
+        std::string& n = childName->str();
+        assert(config.find(n) != config.end());
+        JuliaLibConfig childConfig = config[n];
+    }
+}
+*/
+
+
+
+std::map<jl_method_instance_t *, uint64_t> miPool;
+extern "C" JL_DLLEXPORT void *jl_force_jit(jl_method_instance_t *mi, size_t world)
+{
+    // toplevel method instance should not be cached
+    bool isToplevel = !jl_is_method(mi->def.method);
+    // We use a simple cache to accelerate function calling, which is of course
+    // memory-inefficient. But since most method instance can be compiled, so it would be
+    // relatively rare to get into this branch.
+    auto iter = miPool.find(mi);
+    if (iter != miPool.end()) {
+        return (void *)iter->second;
+    }
+    if (jl_StaticJuliaJIT->inCompiling) {
+        return nullptr;
+    }
+    jl_StaticJuliaJIT->inCompiling = true;
+    llvm::Expected<void *> ptr = jl_StaticJuliaJIT->getInvokePointer(mi, world);
+    assert(ptr);
+    jl_StaticJuliaJIT->inCompiling = false;
+    if (!isToplevel) {
+        miPool[mi] = (uint64_t)*ptr;
+    }
+    return *ptr;
+}
+
+extern "C" JL_DLLEXPORT void *jl_get_spec_ptr(jl_method_instance_t *mi, size_t world)
+{
+    return *(jl_StaticJuliaJIT->getSpecPointer(mi, world));
+}
+
+extern "C" JL_DLLEXPORT void *jl_get_invoke_ptr(jl_method_instance_t *mi, size_t world)
+{
+    return *(jl_StaticJuliaJIT->getInvokePointer(mi, world));
+}
+
+extern "C" JL_DLLEXPORT void *jl_simple_multijit(jl_method_instance_t *mi, size_t world)
+{
+    std::string invokeName = "julia::method::invoke::";
+    auto iter = miPool.find(mi);
+    void *ptr = nullptr;
+    jl_array_t *arr = (jl_array_t *)jl_StaticJuliaJIT->MethodBlacklist;
+    for (size_t i = 0; i < jl_array_len(arr); i++) {
+        if ((jl_value_t *)(mi->def.method) == jl_ptrarrayref(arr, i)) {
+            return ptr;
+        }
+    }
+    ptr = jl_force_jit(mi, world);
+    return ptr;
+    if (iter == miPool.end()) {
+        miPool[mi] = 0;
+        goto ret;
+    }
+    iter->second += 1;
+    if (iter->second < 10) {
+        goto ret;
+    }
+    ptr = jl_force_jit(mi, world);
+ret:
+    return ptr;
+}
+
 class AdressSort {
 public:
     bool operator()(std::pair<std::string, uint64_t> &v1,
@@ -1039,10 +896,10 @@ public:
     };
 };
 
-// A cheap way to debug assembly code, we have all the information for emitted symbol.
-void debug_address()
+std::vector<std::pair<std::string, uint64_t>> resolve_address()
 {
     std::vector<std::pair<std::string, uint64_t>> queue;
+    /*
     for (auto i = has_emitted.begin(); i != has_emitted.end(); i++) {
         std::string invokename = "julia::method::invoke::";
         std::string specname = "julia::method::specfunc::";
@@ -1054,71 +911,334 @@ void debug_address()
         queue.push_back({invokename, invoke_addr});
         queue.push_back({specname, spec_addr});
     }
+    */
     std::sort(queue.begin(), queue.end(), AdressSort());
+    return queue;
+}
+// A cheap way to debug assembly code, we have all the information for emitted symbol.
+void lookup_address(uint64_t addr)
+{
+    std::map<uint64_t, std::string> has_emitted_specfunc;
+    for (auto &KV : has_emitted) {
+        if (startsWith(KV.second, "julia::method::invoke::")) {
+            std::string specName = "julia::method::specfunc::";
+            specName += KV.second.substr(strlen("julia::method::invoke::"));
+            llvm::Expected<void *> result = jl_StaticJuliaJIT->tryLookupSymbol(specName);
+            if (result) {
+                has_emitted_specfunc[(uint64_t)*result] = specName;
+            }
+        }
+        has_emitted_specfunc[KV.first] = KV.second;
+    }
+    auto iter = has_emitted_specfunc.upper_bound(addr);
+    for (auto i = has_emitted_specfunc.begin(); i != has_emitted_specfunc.end(); i++) {
+        llvm::errs() << i->second << " : " << format("%p", (void *)i->first) << "\n";
+    }
+    if (iter == has_emitted_specfunc.end() ||
+        (iter->first != addr && iter == has_emitted_specfunc.begin())) {
+        llvm::errs() << "Address not found!\n";
+    }
+    else {
+        if (iter->first != addr) {
+            iter--;
+        }
+        llvm::errs() << "\n==========\nAddress :\n";
+        llvm::errs() << iter->second << " : " << format("%p", (void *)iter->first) << "\n";
+        llvm::errs() << "\n==========\nEnd of Address :\n";
+    }
+}
+void debug_address()
+{
+    auto queue = resolve_address();
     llvm::errs() << "\n==========\nAddress :\n";
     for (auto i = queue.begin(); i != queue.end(); i++) {
         llvm::errs() << i->first << " : " << format("%p", (void *)i->second) << "\n";
     }
     llvm::errs() << "\n==========\nEnd of Address :\n";
 }
-
-extern "C" JL_DLLEXPORT void *jl_compile_one_methodinst(jl_method_instance_t *mi,
-                                                        size_t world)
+/*
+extern "C" JL_DLLEXPORT void* jl_lookup(jl_value_t* s){
+    std::string name = jl_symbol_name_((jl_sym_t*)s);
+    return jl_StaticJuliaJIT->tryLookupSymbol(name);
+}
+*/
+/*
+extern "C" JL_DLLEXPORT void jl_touch_jit(jl_method_instance_t *mi)
 {
     jl_init_staticjit();
-    if (outputdir != NULL) {
-        auto iter = has_emitted.find(mi);
-        // assert(src!= NULL && jl_is_code_info(src));
-        void *codeinst;
-        assert(outputdir != NULL);
-        if (iter == has_emitted.end()) {
-            std::string s;
-            llvm::raw_string_ostream(s)
-                << "julia::method::invoke::" << name_from_method_instance(mi);
-            SymbolStringPtr namerefptr = jl_StaticJuliaJIT->ES.intern(StringRef(s));
-            auto symOrErr = jl_StaticJuliaJIT->ES.lookup(
-                {/*&jl_StaticJuliaJIT->JuliaBuiltinJD,*/
-                 &jl_StaticJuliaJIT->finalJD,
-                 /*&jl_StaticJuliaJIT->JuliaRuntimeJD*/},
-                namerefptr);
-            // we can't find the symbol
-            auto Err = symOrErr.takeError();
-            if (!Err) {
-                auto addr = symOrErr.get().getAddress();
-                // A bad symbol, discard this symbol.
-                if (addr < 0x100) {
-                    llvm::orc::SymbolNameSet set({namerefptr});
-                    jl_StaticJuliaJIT->finalJD.remove(set);
-                }
-                else {
-                    return (void *)addr;
-                }
-            }
-            jl_compile_methodinst_recursively(mi, outputdir, world, true);
-            iter = has_emitted.find(mi);
-            assert(iter != has_emitted.end());
-        }
-        uint64_t &invokeptr = std::get<1>(iter->second);
-        if (invokeptr == 0) {
-            codeinst = NULL;
-            std::string s;
-            llvm::raw_string_ostream(s)
-                << "julia::method::invoke::" << name_from_method_instance(mi);
-            auto addr = jl_lookup((jl_value_t *)jl_symbol(s.c_str()));
-            llvm::errs() << "julia::method::invoke::" << name_from_method_instance(mi)
-                         << " with address : " << format("%p", (void *)addr) << "\n";
-            std::string s1;
-            llvm::raw_string_ostream(s1)
-                << "julia::method::specfunc::" << name_from_method_instance(mi);
-            auto newaddr = jl_lookup((jl_value_t *)jl_symbol(s1.c_str()));
-            llvm::errs() << "julia::method::specfunc::" << name_from_method_instance(mi)
-                         << " with address : " << format("%p", (void *)newaddr) << "\n";
-            invokeptr = addr;
-            //debug_address();
-        }
-        codeinst = (void *)invokeptr;
-        return codeinst;
+    std::string s1;
+    std::string s2;
+    llvm::raw_string_ostream(s1)
+        << "julia::method::invoke::" << name_from_method_instance(mi);
+    (void)jl_lookup((jl_value_t *)jl_symbol(s1.c_str()));
+    llvm::raw_string_ostream(s2)
+        << "julia::method::specfunc::" << name_from_method_instance(mi);
+    (void)jl_lookup((jl_value_t *)jl_symbol(s2.c_str()));
+}
+*/
+/*
+extern "C" JL_DLLEXPORT void jl_touch_symbol(jl_value_t *s)
+{
+    assert(jl_is_string(s));
+    jl_init_staticjit();
+    std::string sname = jl_string_ptr(s);
+    jl_StaticJuliaJIT->tryLookupSymbol(sname);
+}
+*/
+llvm::raw_fd_ostream *internal_debug_stream = NULL;
+extern "C" JL_DLLEXPORT void jl_set_debug_stream(jl_value_t *path)
+{
+    std::error_code ec;
+    assert(jl_is_string(path));
+    internal_debug_stream = new llvm::raw_fd_ostream(StringRef(jl_string_ptr(path)), ec);
+    // jl_printf(JL_STDOUT,ec.message().c_str());
+    if (ec) {
+        jl_printf(JL_STDOUT, "Unable to open debug stream, check whether you do it right!");
+        abort();
     }
-    jl_error("Dir is unset or in a wrong mode!");
-    return NULL;
+    return;
+}
+/*
+extern "C" JL_DLLEXPORT void jl_invalidate(jl_value_t* mi)
+{
+    assert(jl_is_method_instance(mi));
+    jl_StaticJuliaJIT->insertInvalidatedFunction((jl_method_instance_t*)mi);
+    return;
+}
+*/
+extern std::string encodeJuliaValue(jl_value_t *v, bool &needInvalidated,
+                                    jl_binding_t *bnd);
+extern std::string encodeJLBinding(jl_binding_t *bnd, bool &needInvalidated);
+extern std::string juliaValueToString(jl_value_t *v);
+/*
+extern llvm::raw_fd_ostream* internal_debug_stream;
+
+class MayEmptyStream{};
+// Actually should pass by reference, but that requires a lots of writing
+template<typename T>
+MayEmptyStream& operator<<(MayEmptyStream& in, T&& c){
+    if (internal_debug_stream != NULL){
+        *internal_debug_stream << c;
+        internal_debug_stream->flush();
+    }
+    return in;
+}
+
+MayEmptyStream& operator<<(MayEmptyStream& in, jl_value_t* v){
+    if (internal_debug_stream != NULL){
+        *internal_debug_stream << juliaValueToString(v).c_str();
+        internal_debug_stream->flush();
+    }
+    return in;
+}
+MayEmptyStream debugStream;
+*/
+// prevent string containing '\0' character
+void makeSafe(std::string &s)
+{
+    char *ptr = &s[0];
+    for (size_t i = 0; i < s.size(); i++) {
+        if (ptr[i] == '\0') {
+            ptr[i] = '\1';
+        }
+    }
+}
+
+/*
+    Really bad, we use this to trace external values, but actually this should be done with
+   Julia's ctx and collect them all at once Instead of using an external function
+   
+   TODO : make the name really really correct !!!!!
+*/
+// defined in JuliaValueCoder.cpp
+extern jl_binding_t* tryGetGlobalRef(jl_value_t* v);
+void registerExternalValue(jl_method_instance_t *mi, jl_value_t *v, std::string &llvmName,
+                           jl_binding_t *bnd)
+{
+    bool needInvalidated = false;
+    const std::string &tmp = encodeJuliaValue(v, needInvalidated, bnd);
+    if (needInvalidated) {
+        jl_StaticJuliaJIT->cacheGraph.markMethodInstanceAsNonRelocatable(mi);
+        llvmName = "jlptr::";
+        llvm::raw_string_ostream(llvmName)
+            << (uint64_t)v << "::" << juliaValueToString(jl_typeof(v));
+    }
+    else {
+        llvmName = "jlvalue::";
+        if (jl_is_mutable(jl_typeof(v))) {
+            llvm::raw_string_ostream(llvmName) << (void*)v;
+        }
+        if (bnd == nullptr){
+            bnd = tryGetGlobalRef(v);
+        }
+        if (bnd != nullptr) {
+            llvm::raw_string_ostream(llvmName)
+                << juliaValueToString((jl_value_t *)bnd->owner) << '.'
+                << jl_symbol_name_(bnd->name) << "::" << juliaValueToString(jl_typeof(jl_atomic_load_relaxed(&(bnd->value))));
+        }
+        else{
+            // TODO : this name is incorrect, this may cause problem if the value is really large...
+            // So we need to maintain our own jl_ routine...
+            llvm::raw_string_ostream(llvmName) << juliaValueToString(v);
+        }
+    }
+    makeSafe(llvmName);
+    jl_StaticJuliaJIT->cacheGraph.addDependency(mi, llvmName, tmp);
+}
+
+void registerExprValue(jl_method_instance_t *mi, jl_value_t *v, std::string &llvmName){
+    assert(jl_is_string(v));
+    llvmName = "jlexpr::";
+    llvm::raw_string_ostream(llvmName) << jl_string_ptr(v);
+    makeSafe(llvmName);
+    bool needInvalidated = false;
+    const std::string &tmp = encodeJuliaValue(v, needInvalidated, nullptr);
+    assert(!needInvalidated);
+    jl_StaticJuliaJIT->cacheGraph.addDependency(mi, llvmName, tmp);
+}
+
+void registerJLBinding(jl_method_instance_t *mi, std::string &llvmName, jl_binding_t *bnd,
+                       bool isSlot)
+{
+    bool needInvalidated = false;
+    const std::string &tmp = encodeJLBinding(bnd, needInvalidated);
+    if (needInvalidated) {
+        jl_StaticJuliaJIT->cacheGraph.markMethodInstanceAsNonRelocatable(mi);
+    }
+    if (isSlot) {
+        // emit the pointer of value field of a binding
+        llvmName = "jlslot::";
+    }
+    else {
+        // emit binding
+        llvmName = "jlbnd::";
+    }
+    llvm::raw_string_ostream(llvmName) << juliaValueToString((jl_value_t *)bnd->owner)
+                                       << '.' << jl_symbol_name_(bnd->name);
+    makeSafe(llvmName);
+    jl_StaticJuliaJIT->cacheGraph.addDependency(mi, llvmName, tmp);
+}
+
+// out is a Vector{Tuple{MethodInstance, MethodInstanceState}}
+/*
+struct MethodInstanceState
+    miName::String
+    isCached::Bool
+    isNonRelocatable::Bool
+    unOptIRFilePath::String
+    optIRFilePath::String
+    objectFilePath::String
+    externalSymbols::Vector{Any}
+end
+*/
+jl_value_t* convertStdStringToJLString(const std::string& s){
+    return jl_pchar_to_string(s.data(), s.size());
+}
+
+class DumpGraphHelper{
+    public:
+    DumpGraphHelper(StaticJuliaJIT* jit, jl_array_t* nodeArray) : jit(jit), nodeArray(nodeArray) {
+        j_jitNode_ty = (jl_datatype_t*)jl_eval_string("JITMethodInstance");
+        j_cacheNode_ty = (jl_datatype_t*)jl_eval_string("CachedMethodInstance");
+        j_pluginNode_ty = (jl_datatype_t*)jl_eval_string("PluginMethodInstance");
+    };
+    jl_array_t* dumpGraph(){
+        auto& graph = jit->cacheGraph;
+        for (auto& KV:graph.getMiNodeMap()){
+            dumpNode(KV.second);
+        }
+        return nodeArray;
+    }
+    jl_value_t* dumpNode(MethodInstanceNode* miNode){
+        auto iter = nodeMap.find(miNode);
+        if (iter != nodeMap.end()){
+            return iter->second;
+        }
+        jl_value_t* miName = nullptr;
+        JL_GC_PUSH1(&miName);
+        std::string& tmp = miNode->miName;
+        miName = jl_pchar_to_string(tmp.data(), tmp.size());
+        if (auto jitNode = dyn_cast<JITMethodInstanceNode>(miNode)){
+            jl_value_t* dependencies = nullptr;
+            jl_value_t* isRelocatable = nullptr;
+            jl_value_t* symbolTable = nullptr;
+            jl_value_t* unOptIRFilePath = nullptr;
+            jl_value_t* optIRFilePath = nullptr;
+            jl_value_t* objectFilePath = nullptr;
+            jl_value_t* j_jitNode = nullptr;
+            JL_GC_PUSH7(&dependencies, &isRelocatable, &symbolTable, &unOptIRFilePath, &optIRFilePath, &objectFilePath, &j_jitNode);
+            dependencies = (jl_value_t*)jl_alloc_array_1d(jl_array_any_type, (size_t)0);
+            isRelocatable = jl_box_bool(jitNode->isRelocatable);
+            symbolTable = (jl_value_t*)jl_alloc_array_1d(jl_array_any_type, (size_t)0);
+            unOptIRFilePath = convertStdStringToJLString(jitNode->unOptIRFilePath);
+            optIRFilePath = convertStdStringToJLString(jitNode->optIRFilePath);
+            objectFilePath = convertStdStringToJLString(jitNode->objectFilePath);
+            j_jitNode = jl_new_struct(j_jitNode_ty, jitNode->mi, miName, dependencies, isRelocatable, symbolTable, unOptIRFilePath, optIRFilePath, objectFilePath);
+            nodeMap[miNode] = j_jitNode;
+            jl_array_ptr_1d_push(nodeArray, j_jitNode);
+            JL_GC_POP();
+            JL_GC_POP();
+            // we need to add node before we resolve symbols, otherwise we will have stack overflow.
+            for (auto ch:jitNode->dependencies.queue){
+                jl_array_ptr_1d_push((jl_array_t*)dependencies, dumpNode(ch));
+            }
+            {
+                jl_value_t* symbol = nullptr;
+                jl_value_t* code = nullptr;
+                jl_value_t* svec = nullptr;
+                JL_GC_PUSH3(&symbol, &code, &svec);
+                for (auto& KV:jitNode->symbolTable){
+                    symbol = convertStdStringToJLString(KV.first);
+                    code = convertStdStringToJLString(KV.second);
+                    svec = (jl_value_t*)jl_svec2(symbol, code);
+                    jl_array_ptr_1d_push((jl_array_t*)symbolTable, svec);
+                }
+                JL_GC_POP();
+            }
+            return j_jitNode;
+        }
+        else if (auto cacheNode = dyn_cast<CachedMethodInstanceNode>(miNode)){
+            jl_value_t* libName = nullptr;
+            jl_value_t* objName = nullptr;
+            jl_value_t* j_cacheNode = nullptr;
+            JL_GC_PUSH3(&libName, &objName, &j_cacheNode);
+            libName = convertStdStringToJLString(cacheNode->libName);
+            objName = convertStdStringToJLString(cacheNode->objName);
+            j_cacheNode = jl_new_struct(j_cacheNode_ty, miName, libName, objName);
+            jl_array_ptr_1d_push(nodeArray, j_cacheNode);
+            nodeMap[miNode] = j_cacheNode;
+            JL_GC_POP();
+            JL_GC_POP();
+            return j_cacheNode;
+        }
+        else if (auto pluginNode = dyn_cast<PluginMethodInstanceNode>(miNode)){
+            jl_value_t* pluginName = nullptr;
+            jl_value_t* j_pluginNode = nullptr;
+            JL_GC_PUSH2(&pluginName, &j_pluginNode);
+            std::string& tmp = pluginNode->pluginName;
+            pluginName = jl_pchar_to_string(tmp.data(), tmp.size());
+            j_pluginNode = jl_new_struct(j_pluginNode_ty, miName, pluginName);
+            jl_array_ptr_1d_push(nodeArray, j_pluginNode);
+            nodeMap[miNode] = j_pluginNode;
+            JL_GC_POP();
+            JL_GC_POP();
+            return j_pluginNode;
+        }
+        else{
+            assert(0);
+        }
+    }
+    StaticJuliaJIT* jit;
+    // Output of translated node
+    jl_array_t* nodeArray;
+    // Map, used to translate call graph
+    std::unordered_map<MethodInstanceNode*, jl_value_t*> nodeMap;
+    jl_datatype_t *j_jitNode_ty;
+    jl_datatype_t *j_cacheNode_ty;
+    jl_datatype_t *j_pluginNode_ty;
+};
+
+extern "C" JL_DLLEXPORT void jl_dump_graph(jl_array_t* out){
+    DumpGraphHelper helper(jl_StaticJuliaJIT, out);
+    (void)helper.dumpGraph();
 }

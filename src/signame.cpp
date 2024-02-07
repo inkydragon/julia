@@ -35,6 +35,19 @@
 2. module qualification
 3. isbitstype value as type parameter
 */
+extern "C" JL_DLLEXPORT const char* jl_value_to_pchar(jl_value_t* v){
+    ios_t os;
+    ios_mem(&os, 100);
+    int n = jl_static_show((uv_stream_t*)&os, v);
+    assert(os.bpos == n);
+    // Ensure the buffer is zero terminated!
+    char* returnBuf = (char*)malloc(n + 1);
+    returnBuf[n] = '\0';
+    memcpy(returnBuf,os.buf,n);
+    ios_close(&os);
+    // User needs to free the pointer
+    return returnBuf;
+}
 template<typename ... Args>
 std::string string_format( const std::string& format, Args ... args )
 {
@@ -124,6 +137,10 @@ extern "C" JL_DLLEXPORT void jl_sym_to_fully_qualified_sym(std::stringstream &ou
     char *sn = jl_symbol_name(name);
     int non_id = 0;
     int op = 0;
+    if (name == jl_symbol("'")){
+        out << "adjoint";
+        return;
+    }
     if (jl_is_operator(sn)){
         op = 1;
     }
@@ -377,7 +394,7 @@ extern "C" JL_DLLEXPORT void jl_func_sig_to_string(std::stringstream &s, jl_valu
     }
     return ;
 }
-extern "C" JL_DLLEXPORT void jl_value_to_string(std::stringstream &out, jl_value_t *v){
+extern "C" JL_DLLEXPORT void jl_value_to_stream(std::stringstream &out, jl_value_t *v){
     jl_value_t* vt = jl_typeof(v);
     jl_datatype_to_string(out, v,(jl_datatype_t*)vt , NULL);
 }
@@ -812,8 +829,8 @@ extern "C" JL_DLLEXPORT void jl_datatype_to_string(std::stringstream &out, jl_va
         // type constructor, such as e.g. `Base.UnitRange{Int64}(start=1, stop=2)`
         // It can only be concrete immutable!
         if (!(jl_is_immutable(vt)&&jl_is_concrete_type((jl_value_t*)vt))){
-            jl_error("A bad value in type!");
             jl_(vt);
+            jl_error("A bad value in type!");
         }
         int istuple = jl_is_tuple_type(vt);
         int isnamedtuple = jl_is_namedtuple_type(vt);
@@ -884,7 +901,6 @@ extern "C" JL_DLLEXPORT void jl_datatype_to_string(std::stringstream &out, jl_va
 // maybe we should just pass a stringbuffer in...
 static std::map<jl_value_t*, std::map<jl_value_t*,std::string>> namedpool;
 static std::vector<std::string> toplevelpool;
-static int toplevel_id = 0;
 extern "C" JL_DLLEXPORT const char* jl_name_from_method_instance(jl_method_instance_t *li) {   
     // we need to cache the string in a pool to manage memory.
     std::stringstream stm;
@@ -922,9 +938,9 @@ extern "C" JL_DLLEXPORT const char* jl_name_from_method_instance(jl_method_insta
         }
     }
     else{
-        stm << "toplevel";
-        stm << toplevel_id;
-        toplevel_id += 1;
+        stm << "toplevel::";
+        stm << jl_symbol_name_(li->def.module->name);
+        stm << (uint64_t)li;
         toplevelpool.push_back(stm.str());
         return toplevelpool.back().c_str();
     }

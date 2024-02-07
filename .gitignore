@@ -33,3 +33,6 @@
 .DS_Store
 .idea/*
 .vscode/*
+BuildSystem/test/objs
+BuildSystem/tool
+src/dyncall
