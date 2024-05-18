@@ -1210,7 +1210,8 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
             if (!raw)
                 f->addFnAttr(Attribute::NoUnwind);
         });
-        auto TMBase = jl_ExecutionEngine->cloneTargetMachine();
+    
+        auto TMBase = jl_ExecutionEngine->cloneTargetMachine(true);
         LLVMTargetMachine *TM = static_cast<LLVMTargetMachine*>(TMBase.get());
         legacy::PassManager PM;
         addTargetPasses(&PM, TM->getTargetTriple(), TM->getTargetIRAnalysis());
@@ -1236,7 +1237,7 @@ jl_value_t *jl_dump_function_asm_impl(jl_llvmf_dump_t* dump, char emit_mc, const
             if (!strcmp(asm_variant, "intel"))
                 OutputAsmDialect = 1;
             MCInstPrinter *InstPrinter = TM->getTarget().createMCInstPrinter(
-                jl_ExecutionEngine->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI);
+                TM->getTargetTriple(), OutputAsmDialect, MAI, MII, MRI);
              std::unique_ptr<MCAsmBackend> MAB(TM->getTarget().createMCAsmBackend(
                 STI, MRI, TM->Options.MCOptions));
             std::unique_ptr<MCCodeEmitter> MCE;

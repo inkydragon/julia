@@ -2022,6 +2022,14 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
     if (src && jl_is_code_info(src)) {
         auto ctx = jl_ExecutionEngine->getContext();
         orc::ThreadSafeModule m = jl_create_ts_module(name_from_method_instance(mi), *ctx);
+        if (params.not_native_isa) {
+            jl_printf(JL_STDERR, "params.not_native_isa=true\n");
+            jl_printf(JL_STDERR, "old_triple=%s\n", jl_ExecutionEngine->getTargetTriple().str().c_str());
+            auto triple = Triple(Twine("wasm64-unknown-unknown"));
+            jl_printf(JL_STDERR, "new_triple=%s\n", triple.str().c_str());
+            m = jl_create_ts_module(name_from_method_instance(mi), *ctx,
+                jl_ExecutionEngine->getDataLayout(), triple);
+        }
         uint64_t compiler_start_time = 0;
         uint8_t measure_compile_time_enabled = jl_atomic_load_relaxed(&jl_measure_compile_time_enabled);
         if (measure_compile_time_enabled)
@@ -2074,7 +2082,7 @@ void jl_get_llvmf_defn_impl(jl_llvmf_dump_t* dump, jl_method_instance_t *mi, siz
             }
             assert(!verifyLLVMIR(*m.getModuleUnlocked()));
             if (optimize) {
-                NewPM PM{jl_ExecutionEngine->cloneTargetMachine(), getOptLevel(jl_options.opt_level)};
+                NewPM PM{jl_ExecutionEngine->cloneTargetMachine(params.not_native_isa), getOptLevel(jl_options.opt_level)};
                 //Safe b/c context lock is held by output
                 PM.run(*m.getModuleUnlocked());
                 assert(!verifyLLVMIR(*m.getModuleUnlocked()));

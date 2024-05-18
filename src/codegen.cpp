@@ -9942,6 +9942,13 @@ extern "C" void jl_init_llvm(void)
     InitializeNativeTargetAsmParser();
     InitializeNativeTargetDisassembler();
 
+    // init all
+    InitializeAllTargets();
+    InitializeAllTargetMCs();
+    InitializeAllAsmParsers();
+    InitializeAllAsmPrinters();
+    InitializeAllDisassemblers();
+
     // Initialize passes
     PassRegistry &Registry = *PassRegistry::getPassRegistry();
     initializeCore(Registry);

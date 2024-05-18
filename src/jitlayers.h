@@ -543,6 +543,7 @@ public:
 
     // TargetMachine pass-through methods
     std::unique_ptr<TargetMachine> cloneTargetMachine() const JL_NOTSAFEPOINT;
+    std::unique_ptr<TargetMachine> cloneTargetMachine(int not_native_isa) const JL_NOTSAFEPOINT;
     const Triple& getTargetTriple() const JL_NOTSAFEPOINT;
     StringRef getTargetFeatureString() const JL_NOTSAFEPOINT;
     StringRef getTargetCPU() const JL_NOTSAFEPOINT;

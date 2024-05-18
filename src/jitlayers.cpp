@@ -2222,6 +2222,35 @@ std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine() const
     fixupTM(*NewTM);
     return NewTM;
 }
+std::unique_ptr<TargetMachine> JuliaOJIT::cloneTargetMachine(int not_native_isa) const
+{
+    if (!not_native_isa) {
+        return JuliaOJIT::cloneTargetMachine();
+    }
+    
+    jl_printf(JL_STDERR, "[cloneTargetMachine] params.not_native_isa=true\n");
+    auto TargetTriple = Triple("wasm64-unknown-unknown");
+    std::string Error;
+    auto Target = TargetRegistry::lookupTarget(TargetTriple.str(), Error);
+    if (!Target) {
+        jl_printf(JL_STDERR,
+            "[cloneTargetMachine] TargetRegistry::lookupTarget: error: %s\n",
+            Error.c_str());
+    }
+
+    auto NewTM = std::unique_ptr<TargetMachine>(
+        Target->createTargetMachine(
+            TargetTriple.str(),
+            std::string("generic"),
+            std::string(""),
+            TargetOptions(),
+            Reloc::Static,
+            CodeModel::Small
+        ));
+
+    fixupTM(*NewTM);
+    return NewTM;
+}
 
 const Triple& JuliaOJIT::getTargetTriple() const {
     return TM->getTargetTriple();
