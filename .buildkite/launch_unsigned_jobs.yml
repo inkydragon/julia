@@ -43,6 +43,18 @@ steps:
                   command: |
                     buildkite-agent annotate 'Skip CI' --style 'info' --context 'ctx-info'
 
+  - label: "Check envs"
+    depends_on: "pre-run-check"
+      # NOTE: you cannot use `${TRIGGER_BUILD?}`
+      #   "interpolating command: $TRIGGER_BUILD: not set"
+      # echo "TRIGGER_BUILD=${TRIGGER_BUILD?}"
+    commands: |
+      if [ "$$(buildkite-agent env get TRIGGER_BUILD)" == "1" ]; then
+        echo "Env[TRIGGER_BUILD] is set"
+      else
+        echo "Env[TRIGGER_BUILD] is NOT set"
+      fi
+
   - group: "Build"
     notify:
       - github_commit_status:
