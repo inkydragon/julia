@@ -1,0 +1,14 @@
+
+steps:
+  - group: "Upload"
+    steps:
+      - label: "Launch upload jobs"
+        commands: |
+          echo "Launch `upload_*` jobs to store tarballs into S3 once tests are done"
+          echo "Launch doctest deploy job"
+
+  - group: "Allow Fail (Upload)"
+    steps:
+      - label: "Launch allowed-to-fail upload jobs"
+        commands: |
+          echo "Launch Linux allowed-to-fail upload jobs"

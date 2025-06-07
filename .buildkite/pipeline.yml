@@ -1,10 +1,6 @@
 
 steps:
-  - label: ":hammer: Build"
-    command: "echo 1"
-    key: build
-
-  - label: ":test_tube: Test"
-    command: "echo 2"
-    key: test
-    depends_on: build
+  - label: "Fake WebUI Step"
+    command: |
+      buildkite-agent pipeline upload .buildkite/launch_unsigned_jobs.yml
+      buildkite-agent pipeline upload .buildkite/launch_signed_jobs.yml

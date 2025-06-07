@@ -1,0 +1,27 @@
+
+steps:
+  - group: "Build"
+    notify:
+      - github_commit_status:
+          context: "Build"
+    steps:
+      - label: "Launch build jobs"
+        commands: |
+          echo "Launch Linux build jobs."
+          echo "Launch macOS build jobs:"
+          echo "Launch Windows build jobs:"
+
+  - group: "Test"
+    notify:
+      - github_commit_status:
+          context: "Test"
+    steps:
+      - label: "Launch test jobs"
+        plugins:
+          - JuliaCI/external-buildkite#v1:
+              version: "./.buildkite-external-version"
+              repo_url: "https://github.com/JuliaCI/julia-buildkite"
+        commands: |
+          echo "Launch Linux test jobs."
+          echo "Launch macOS test jobs:"
+          echo "Launch Windows test jobs:"

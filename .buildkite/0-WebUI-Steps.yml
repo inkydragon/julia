@@ -1,0 +1,4 @@
+# https://buildkite.com/cyhan-dev/julia-buildkite-dev/settings/steps
+steps:
+  - label: ":buildkite: Upload steps"
+    command: "buildkite-agent pipeline upload .buildkite/pipeline.yml"
