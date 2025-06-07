@@ -17,10 +17,6 @@ steps:
           context: "Test"
     steps:
       - label: "Launch test jobs"
-        plugins:
-          - JuliaCI/external-buildkite#v1:
-              version: "./.buildkite-external-version"
-              repo_url: "https://github.com/JuliaCI/julia-buildkite"
         commands: |
           echo "Launch Linux test jobs."
           echo "Launch macOS test jobs:"
