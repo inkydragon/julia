@@ -6,11 +6,9 @@ steps:
       # https://github.com/buildkite-plugins/monorepo-diff-buildkite-plugin
       - monorepo-diff#v1.4.0:
           watch:
-            - path:
-                # NOTE:
-                # We want to do something like `paths-ignore` in github action
-                #   https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#example-excluding-paths
-                # paths-ignore:
+            # This match will catch all files that will trigger a CI run
+            - path: "**/*"
+              skip_path: 
                 - '.devcontainer/'
                 - '.github/'
                 # NOTE: '.buildkite-external-version' is a part of Buildkite CI
@@ -35,12 +33,8 @@ steps:
                 - 'README.md'
                 - 'THIRDPARTY.md'
                 - 'typos.toml'
-              # TODO: make sure not modify other files
               config:
-                command: "echo Modify ignored files."
-            - path: "doc/*"
-              config:
-                command: "echo Change `doc/`"
+                command: "echo run-ci=true"
 
   - label: ":hammer: Build"
     command: "echo 1"
