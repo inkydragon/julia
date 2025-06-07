@@ -34,7 +34,12 @@ steps:
                 - 'THIRDPARTY.md'
                 - 'typos.toml'
               config:
-                command: "echo run-ci=true"
+                command: |
+                  buildkite-agent env set TRIGGER_BUILD=1
+            - default:  # if no paths are matched
+                config:
+                  command: |
+                    echo Skip CI
 
   - label: ":hammer: Build"
     command: "echo 1"
