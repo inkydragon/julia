@@ -1,8 +1,51 @@
 
 steps:
+  - label: "Check if run pipelines"
+    key: "check-diff"
+    plugins:
+      # https://github.com/buildkite-plugins/monorepo-diff-buildkite-plugin
+      - monorepo-diff#v1.4.0:
+          watch:
+            - path:
+                # NOTE:
+                # We want to do something like `paths-ignore` in github action
+                #   https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions#example-excluding-paths
+                # paths-ignore:
+                - '.devcontainer/'
+                - '.github/'
+                # NOTE: '.buildkite-external-version' is a part of Buildkite CI
+                - '.clang-format'
+                - '.clangd'
+                - '.codecov.yml'
+                - '.devcontainer'
+                - '.git-blame-ignore-revs'
+                - '.gitattributes'
+                - '.github'
+                - '.gitignore'
+                - '.mailmap'
+                - 'AGENTS.md'
+                - 'CITATION.bib'
+                - 'CITATION.cff'
+                - 'CLAUDE.md'
+                - 'CONTRIBUTING.md'
+                # NOTE: 'HISTORY.md' is used in docs
+                - 'julia.spdx.json'
+                - 'LICENSE.md'
+                # NOTE: 'NEWS.md' is used in docs
+                - 'README.md'
+                - 'THIRDPARTY.md'
+                - 'typos.toml'
+              # TODO: make sure not modify other files
+              config:
+                command: "echo Modify ignored files."
+            - path: "doc/*"
+              config:
+                command: "echo Change `doc/`"
+
   - label: ":hammer: Build"
     command: "echo 1"
     key: build
+    depends_on: check-diff
 
   - label: ":test_tube: Test"
     command: "echo 2"
