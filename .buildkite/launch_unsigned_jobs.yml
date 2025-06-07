@@ -1,11 +1,55 @@
 
 steps:
+  - label: "Check if run pipelines"
+    key: "pre-run-check"
+    plugins:
+      # https://github.com/buildkite-plugins/monorepo-diff-buildkite-plugin
+      - monorepo-diff#v1.4.0:
+          watch:
+            # This match will catch all files that will trigger a CI run
+            - path: "**/*"
+              skip_path: 
+                - '.devcontainer/'
+                - '.github/'
+                # NOTE: '.buildkite-external-version' is a part of Buildkite CI
+                - '.clang-format'
+                - '.clangd'
+                - '.codecov.yml'
+                - '.devcontainer'
+                - '.git-blame-ignore-revs'
+                - '.gitattributes'
+                - '.github'
+                - '.gitignore'
+                - '.mailmap'
+                - 'AGENTS.md'
+                - 'CITATION.bib'
+                - 'CITATION.cff'
+                - 'CLAUDE.md'
+                - 'CONTRIBUTING.md'
+                # NOTE: 'HISTORY.md' is used in docs
+                - 'julia.spdx.json'
+                - 'LICENSE.md'
+                # NOTE: 'NEWS.md' is used in docs
+                - 'README.md'
+                - 'THIRDPARTY.md'
+                - 'typos.toml'
+              config:
+                label: "Set env: TRIGGER_BUILD"
+                command: |
+                  buildkite-agent env set TRIGGER_BUILD=1
+            - default:  # if no paths are matched
+                config:
+                  label: "Add annotate: Skip CI"
+                  command: |
+                    buildkite-agent annotate 'Skip CI' --style 'info' --context 'ctx-info'
+
   - group: "Build"
     notify:
       - github_commit_status:
           context: "Build"
     steps:
       - label: "Launch build jobs"
+        depends_on: "pre-run-check"
         commands: |
           echo "Launch Linux build jobs."
           echo "Launch macOS build jobs:"
@@ -17,6 +61,7 @@ steps:
           context: "Test"
     steps:
       - label: "Launch test jobs"
+        depends_on: "pre-run-check"
         commands: |
           echo "Launch Linux test jobs."
           echo "Launch macOS test jobs:"
