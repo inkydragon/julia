@@ -1,3 +1,5 @@
+# TRIGGER BUILD: 1
+
 JULIAHOME := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 include $(JULIAHOME)/Make.inc
 # import LLVM_SHARED_LIB_NAME
