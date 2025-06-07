@@ -1,0 +1,10 @@
+
+steps:
+  - label: ":hammer: Build"
+    command: "echo 1"
+    key: build
+
+  - label: ":test_tube: Test"
+    command: "echo 2"
+    key: test
+    depends_on: build
