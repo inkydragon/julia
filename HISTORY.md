@@ -6242,9 +6242,9 @@ Command line option changes
     or turns them into errors ([#9294]).
 
   * Some command line options are slated for deprecation / removal
-    - `-P, --post-boot <expr>`  Evaluate <expr>, but don't disable interactive mode (deprecated, use -i -e instead)
     - `-f, --no-startup` Don't load `~/.juliarc` (deprecated, use --startup-file=no)
     - `-F` Load `~/.juliarc` (deprecated, use --startup-file=yes)
+    - `-P, --post-boot <expr>`  Evaluate `<expr>`, but don't disable interactive mode (deprecated, use -i -e instead)
     - `--no-history-file`  Don't load history file (deprecated, use --history-file=no)
 
 Compiler/Runtime improvements
