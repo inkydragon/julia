@@ -625,7 +625,8 @@ Standard library changes
         repl.options.hint_tab_completes = false
     end
   end
-  ``` ([#51229]).
+  ```
+  ([#51229]).
 * Meta-M with an empty prompt now toggles the contextual module between the previous non-Main
   contextual module and Main so that switching back and forth is simple. ([#51616], [#52670])
 
