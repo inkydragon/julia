@@ -185,7 +185,7 @@ New language features
 * `Threads.@spawn` now takes a `:samepool` argument to specify the same threadpool as the caller.
   `Threads.@spawn :samepool foo()` which is shorthand for `Threads.@spawn Threads.threadpool() foo()` ([#57109]).
 * The `@ccall` macro can now take a `gc_safe` argument, that if set to true allows the runtime to run garbage collection concurrently to the `ccall` ([#49933]).
-* A single method covering multiple functions is now allowed in more cases. See issue #54620. ([#58131]).
+* A single method covering multiple functions is now allowed in more cases. See issue [#54620]. ([#58131]).
 
 Language changes
 ----------------
@@ -385,8 +385,10 @@ Tooling Improvements
 [#40989]: https://github.com/JuliaLang/julia/issues/40989
 [#45793]: https://github.com/JuliaLang/julia/issues/45793
 [#49355]: https://github.com/JuliaLang/julia/issues/49355
+[#49933]: https://github.com/JuliaLang/julia/issues/49933
 [#50988]: https://github.com/JuliaLang/julia/issues/50988
 [#51149]: https://github.com/JuliaLang/julia/issues/51149
+[#51362]: https://github.com/JuliaLang/julia/issues/51362
 [#51810]: https://github.com/JuliaLang/julia/issues/51810
 [#52103]: https://github.com/JuliaLang/julia/issues/52103
 [#52999]: https://github.com/JuliaLang/julia/issues/52999
@@ -407,6 +409,7 @@ Tooling Improvements
 [#54609]: https://github.com/JuliaLang/julia/issues/54609
 [#54610]: https://github.com/JuliaLang/julia/issues/54610
 [#54619]: https://github.com/JuliaLang/julia/issues/54619
+[#54620]: https://github.com/JuliaLang/julia/issues/54620
 [#54653]: https://github.com/JuliaLang/julia/issues/54653
 [#54662]: https://github.com/JuliaLang/julia/issues/54662
 [#54707]: https://github.com/JuliaLang/julia/issues/54707
@@ -444,6 +447,8 @@ Tooling Improvements
 [#57087]: https://github.com/JuliaLang/julia/issues/57087
 [#57109]: https://github.com/JuliaLang/julia/issues/57109
 [#57253]: https://github.com/JuliaLang/julia/issues/57253
+[#57727]: https://github.com/JuliaLang/julia/issues/57727
+[#58131]: https://github.com/JuliaLang/julia/issues/58131
 
 Julia v1.11 Release Notes
 =========================
