@@ -497,7 +497,7 @@ Command-line option changes
 (i.e. using `julia script.jl` or `julia -e expr`), julia will subsequently run the `Main.main` function automatically.
 This is intended to unify script and compilation workflows, where code loading may happen
 in the compiler and execution of `Main.main` may happen in the resulting executable. For interactive use, there is no semantic
-difference between defining a `main` function and executing the code directly at the end of the script ([50974]).
+difference between defining a `main` function and executing the code directly at the end of the script ([#50974]).
 * The `--compiled-modules` and `--pkgimages` flags can now be set to `existing`, which will
   cause Julia to consider loading existing cache files, but not to create new ones ([#50586]
   and [#52573]).
@@ -701,6 +701,7 @@ Tooling Improvements
 [#50797]: https://github.com/JuliaLang/julia/issues/50797
 [#50864]: https://github.com/JuliaLang/julia/issues/50864
 [#50958]: https://github.com/JuliaLang/julia/issues/50958
+[#50974]: https://github.com/JuliaLang/julia/issues/50974
 [#51229]: https://github.com/JuliaLang/julia/issues/51229
 [#51416]: https://github.com/JuliaLang/julia/issues/51416
 [#51448]: https://github.com/JuliaLang/julia/issues/51448
@@ -2826,7 +2827,7 @@ Build system changes
 New library functions
 ---------------------
 
-* `getipaddrs()` function returns all the IP addresses of the local machine, with IPv4 addresses sorting before IPv6 addresses ([#30349, #30604]).
+* `getipaddrs()` function returns all the IP addresses of the local machine, with IPv4 addresses sorting before IPv6 addresses ([#30349], [#30604]).
 * `getipaddr(addr_type)` and `getipaddrs(addr_type)` functions returns an IP address(es) of the desired type of the local machine ([#30604]).
 * Added `Base.hasproperty` and `Base.hasfield` ([#28850]).
 * One argument `!=(x)`, `>(x)`, `>=(x)`, `<(x)`, `<=(x)` have been added, returning partially-applied
@@ -2916,6 +2917,7 @@ External dependencies
 [#30200]: https://github.com/JuliaLang/julia/issues/30200
 [#30298]: https://github.com/JuliaLang/julia/issues/30298
 [#30323]: https://github.com/JuliaLang/julia/issues/30323
+[#30349]: https://github.com/JuliaLang/julia/issues/30349
 [#30372]: https://github.com/JuliaLang/julia/issues/30372
 [#30382]: https://github.com/JuliaLang/julia/issues/30382
 [#30494]: https://github.com/JuliaLang/julia/issues/30494
@@ -3946,7 +3948,7 @@ Library improvements
     of sparse matrices. ([#27470])
 
   * Added an optimized method of `kron` for taking the tensor product of two
-    `Diagonal` matrices. ([27581])
+    `Diagonal` matrices. ([#27581])
 
   * An official API for extending `rand` is now defined ([#23964], [#25002]).
 
@@ -4923,6 +4925,7 @@ Command-line option changes
 [#27473]: https://github.com/JuliaLang/julia/issues/27473
 [#27554]: https://github.com/JuliaLang/julia/issues/27554
 [#27560]: https://github.com/JuliaLang/julia/issues/27560
+[#27581]: https://github.com/JuliaLang/julia/issues/27581
 [#27616]: https://github.com/JuliaLang/julia/issues/27616
 [#27635]: https://github.com/JuliaLang/julia/issues/27635
 [#27641]: https://github.com/JuliaLang/julia/issues/27641
@@ -6477,10 +6480,10 @@ Library improvements
       directory the temporary file or directory is created in.
 
     * New garbage collector tracked memory allocator functions: `jl_malloc`, `jl_calloc`,
-    `jl_realloc`, and `jl_free` with libc API ([[#12034]]).
+    `jl_realloc`, and `jl_free` with libc API ([#12034]).
 
     * `mktempdir` and `mktemp` now have variants that take a function as its
-      first argument for automated clean-up ([[#9017]]).
+      first argument for automated clean-up ([#9017]).
 
 Deprecated or removed
 ---------------------
