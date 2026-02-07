@@ -794,7 +794,7 @@ Build system changes
 New library functions
 ---------------------
 
-* `tanpi` is now defined. It computes tan(π*x) more accurately than `tan(pi*x)` ([#48575]).
+* `tanpi` is now defined. It computes `tan(π*x)` more accurately than `tan(pi*x)` ([#48575]).
 * `fourthroot(x)` is now defined in `Base.Math` and can be used to compute the fourth root of `x`.
    It can also be accessed using the unicode character `∜`, which can be typed by `\fourthroot<tab>` ([#48899]).
 * `Libc.memmove`, `Libc.memset`, and `Libc.memcpy` are now defined, whose functionality matches that of their respective C calls.
@@ -4334,7 +4334,7 @@ Deprecated or removed
   * `isleaftype` is deprecated in favor of the simpler predicates `isconcretetype` and `isdispatchtuple`.
     Concrete types are those that might equal `typeof(x)` for some `x`;
     `isleaftype` included some types for which this is not true. Those are now categorized more precisely
-    as "dispatch tuple types" and "!has_free_typevars" (not exported). ([#17086], [#25496])
+    as "dispatch tuple types" and "`!has_free_typevars`" (not exported). ([#17086], [#25496])
 
   * `contains(eq, itr, item)` is deprecated in favor of `any` with a predicate ([#23716]).
 
@@ -6263,7 +6263,7 @@ Compiler/Runtime improvements
 Library improvements
 --------------------
 
-  * Build with USE_GPL_LIBS=0 to exclude all GPL libraries and code ([#10870]).
+  * Build with `USE_GPL_LIBS=0` to exclude all GPL libraries and code ([#10870]).
 
   * Linear algebra
 
