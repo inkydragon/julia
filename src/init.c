@@ -390,10 +390,10 @@ JL_DLLEXPORT void *jl_libjulia_handle;
 JL_DLLEXPORT void *jl_RTLD_DEFAULT_handle;
 JL_DLLEXPORT void *jl_exe_handle;
 #ifdef _OS_WINDOWS_
-void *jl_ntdll_handle;
-void *jl_kernel32_handle;
-void *jl_crtdll_handle;
-void *jl_winsock_handle;
+JL_DLLEXPORT void *jl_ntdll_handle;
+JL_DLLEXPORT void *jl_kernel32_handle;
+JL_DLLEXPORT void *jl_crtdll_handle;
+JL_DLLEXPORT void *jl_winsock_handle;
 extern const char *jl_crtdll_name;
 #endif
 

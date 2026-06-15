@@ -1620,9 +1620,9 @@ typedef struct {
     CONTEXT context;
 } bt_cursor_t;
 #endif
-extern uv_mutex_t jl_dll_notify_lock;
+extern JL_DLLEXPORT uv_mutex_t jl_dll_notify_lock;
 extern JL_DLLEXPORT uv_mutex_t jl_in_stackwalk;
-void jl_profile_process_dll_events(void) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void jl_profile_process_dll_events(void) JL_NOTSAFEPOINT;
 #elif !defined(JL_DISABLE_LIBUNWIND)
 // This gives unwind only local unwinding options ==> faster code
 #  define UNW_LOCAL_ONLY
@@ -1769,15 +1769,15 @@ JL_DLLEXPORT extern void *jl_RTLD_DEFAULT_handle;
 
 #if defined(_OS_WINDOWS_)
 JL_DLLEXPORT extern const char *jl_crtdll_basename;
-extern void *jl_ntdll_handle;
-extern void *jl_kernel32_handle;
-extern void *jl_crtdll_handle;
-extern void *jl_winsock_handle;
+JL_DLLEXPORT extern void *jl_ntdll_handle;
+JL_DLLEXPORT extern void *jl_kernel32_handle;
+JL_DLLEXPORT extern void *jl_crtdll_handle;
+JL_DLLEXPORT extern void *jl_winsock_handle;
 void win32_formatmessage(DWORD code, char *reason, int len) JL_NOTSAFEPOINT;
 #endif
 
 JL_DLLEXPORT void *jl_get_library_(const char *f_lib, int throw_err);
-void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL_NOTSAFEPOINT;
+JL_DLLEXPORT void *jl_find_dynamic_library_by_addr(void *symbol, int throw_err, int close) JL_NOTSAFEPOINT;
 #define jl_get_library(f_lib) jl_get_library_(f_lib, 1)
 JL_DLLEXPORT void *jl_load_and_lookup(const char *f_lib, const char *f_name, _Atomic(void*) *hnd);
 JL_DLLEXPORT void *jl_lazy_load_and_lookup(jl_value_t *lib_val, jl_value_t *f_name);
