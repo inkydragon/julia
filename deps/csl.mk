@@ -86,6 +86,10 @@ $(eval $(call copy_csl,$(call versioned_libname,libgomp,1)))
 $(eval $(call copy_csl,$(call versioned_libname,libssp,0)))
 
 ifeq ($(OS),WINNT)
+# Ensure the directory exists before copy_csl_static_private rules try to use it
+$(build_private_libdir):
+	mkdir -p $@
+
 # These are static gcc runtime libraries / objects for linking pkgimages
 $(eval $(call copy_csl_static_private,libgcc.a))
 $(eval $(call copy_csl_static_private,libgcc_s.a))
